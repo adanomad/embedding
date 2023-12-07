@@ -1,4 +1,7 @@
-# python extract.py --pdf your_pdf_file.pdf
+#!/usr/bin/python3
+# This script extracts images and text from a PDF file.
+# Usage:
+# python extract_pdf.py --pdf your_pdf_file.pdf
 
 import fitz  # PyMuPDF
 import os

@@ -1,3 +1,11 @@
+#!/usr/bin/python3
+# Description: This script generates an embedding for image.
+# The downside is there's not text embedding, so you can't compare images to text.
+# But the upside is that it is lighter-weight, faster than CLIP.
+# mobilenet_v3_small.tflite is 3.9M
+# mobilenet_v3_large.tflite is 10M
+# Usage:
+# python embedding_mediapipe.py
 import mediapipe as mp
 import time
 from typing import Tuple
