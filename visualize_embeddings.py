@@ -13,26 +13,25 @@
 #
 # install the pandas numpy matplotlib scikit-learn packages
 # python visualize_embeddings.py data.csv vector_column
-
-
 import pandas as pd
-# import numpy as np
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
+import plotly.offline as pyo
+import plotly.graph_objs as go
 import argparse
 import ast
 
-def read_vectors_from_csv(filename, column_name):
+def read_vectors_and_names_from_csv(filename, name_column, vector_column):
     df = pd.read_csv(filename)
-    return df[column_name].apply(ast.literal_eval).tolist()
+    names = df[name_column].tolist()
+    vectors = df[vector_column].apply(ast.literal_eval).tolist()
+    return names, vectors
 
 def check_consistent_length(vectors):
     length = len(vectors[0])
     return all(len(v) == length for v in vectors)
 
-def main(filename, column_name):
-    vectors = read_vectors_from_csv(filename, column_name)
+def main(filename, name_column, vector_column):
+    names, vectors = read_vectors_and_names_from_csv(filename, name_column, vector_column)
 
     if not check_consistent_length(vectors):
         raise ValueError("Vectors are not of consistent lengths.")
@@ -41,21 +40,25 @@ def main(filename, column_name):
     pca = PCA(n_components=3)
     vectors_reduced = pca.fit_transform(vectors)
 
-    # 3D Plotting
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(vectors_reduced[:, 0], vectors_reduced[:, 1], vectors_reduced[:, 2])
+    # Create a DataFrame for Plotly
+    df_plot = pd.DataFrame(vectors_reduced, columns=['PCA1', 'PCA2', 'PCA3'])
+    df_plot['File Name'] = names
 
-    ax.set_xlabel('PCA1')
-    ax.set_ylabel('PCA2')
-    ax.set_zlabel('PCA3')
+    # 3D Plotting with Plotly
+    trace = go.Scatter3d(x=df_plot['PCA1'], y=df_plot['PCA2'], z=df_plot['PCA3'],
+                         text=df_plot['File Name'], mode='markers',
+                         marker=dict(size=5))
+    layout = go.Layout(title='3D Scatter plot')
+    fig = go.Figure(data=[trace], layout=layout)
 
-    plt.show()
+    pyo.plot(fig, filename=f'{filename}.html')
+    print(f'Plot saved to {filename}.html')
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Visualize vectors from a CSV file.")
+    parser = argparse.ArgumentParser(description="Visualize vectors from a CSV file using Plotly.")
     parser.add_argument('filename', type=str, help='Path to the CSV file.')
-    parser.add_argument('column_name', type=str, help='Name of the column containing vectors.')
+    parser.add_argument('name_column', type=str, help='Name of the column containing file names.')
+    parser.add_argument('vector_column', type=str, help='Name of the column containing vectors.')
     args = parser.parse_args()
 
-    main(args.filename, args.column_name)
+    main(args.filename, args.name_column, args.vector_column)

@@ -71,6 +71,12 @@ if __name__ == '__main__':
                 directory = '.'
             image_paths = get_matching_files(directory, pattern)
 
+        # Check if the file already exists, if not create it
+        if not os.path.isfile(args.output):
+            with open(args.output, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['image', 'seconds', 'md5', 'embedding'])
+            
         for idx, image_path in enumerate(image_paths):
             start_time = time.time()
             print(f"Processing image {idx + 1} of {len(image_paths)}: {image_path}")

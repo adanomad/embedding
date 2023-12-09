@@ -4,3 +4,4 @@ data/
 .env
 *.csv
 .DS_Store
+*.html
