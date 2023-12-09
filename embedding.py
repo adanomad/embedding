@@ -5,10 +5,11 @@
 # python embedding.py --image "./images/*.jpg" --output output.csv
 # python embedding.py --image "path/to/image.jpg" --output output.csv --embedding_method mediapipe
 
+# CLIP embedder runs faster (10ms) than the MediaPipe embedder (50ms) when CUDA is available.
+# When CUDA is not available, CLIP embedder runs slower (3s).
 
 import argparse
 import csv
-from functools import cache
 from PIL import Image
 import clip
 import torch
@@ -58,36 +59,29 @@ def embedding_clip(model, preprocess, device, input_data, is_text=True):
     return embedding, time_taken
 
 
-def embedding_mediapipe(model_path: str, mp_image_path: str) -> Tuple[list, float]:
-    """
-    Embeds an image using the specified model and returns the embedding vector and time taken.
+class MediaPipeEmbedder:
+    def __init__(self, model_path: str):
+        options = mp.tasks.vision.ImageEmbedderOptions(
+            base_options=mp.tasks.BaseOptions(model_asset_path=model_path),
+            quantize=True,
+            running_mode=mp.tasks.vision.RunningMode.IMAGE,
+        )
+        self.embedder = mp.tasks.vision.ImageEmbedder.create_from_options(options)
 
-    :param model_path: Path to the model file.
-    :param mp_image_path: Path to the image file.
-    :return: Tuple of time taken and the embedding vector.
-    """
+    def embed_image(self, mp_image_path: str) -> Tuple[list, float]:
+        """
+        Embeds an image using the specified model and returns the embedding vector and time taken.
 
-    # Typing for MediaPipe classes
-    BaseOptions = mp.tasks.BaseOptions
-    ImageEmbedder = mp.tasks.vision.ImageEmbedder
-    ImageEmbedderOptions = mp.tasks.vision.ImageEmbedderOptions
-    VisionRunningMode = mp.tasks.vision.RunningMode
-
-    options = ImageEmbedderOptions(
-        base_options=BaseOptions(model_asset_path=model_path),
-        quantize=True,
-        running_mode=VisionRunningMode.IMAGE,
-    )
-
-    start_time = time.time()
-
-    with ImageEmbedder.create_from_options(options) as embedder:
+        :param model_path: Path to the model file.
+        :param mp_image_path: Path to the image file.
+        :return: Tuple of time taken and the embedding vector.
+        """
+        start_time = time.time()
         mp_image = mp.Image.create_from_file(mp_image_path)
-        embedding_result = embedder.embed(mp_image)
+        embedding_result = self.embedder.embed(mp_image)
         vector = embedding_result.embeddings[0].embedding
-
-    end_time = time.time()
-    return list(vector), end_time - start_time
+        end_time = time.time()
+        return list(vector), end_time - start_time
 
 
 if __name__ == "__main__":
@@ -138,13 +132,14 @@ if __name__ == "__main__":
                 writer = csv.writer(csvfile)
                 writer.writerow(["image", "seconds", "md5", "embedding"])
 
+        mp_embedder = MediaPipeEmbedder(args.model_path)
         for idx, image_path in enumerate(image_paths):
             if args.embedding_method == "clip":
                 embedding, time_taken = embedding_clip(
                     model, preprocess, device, image_path
                 )
             elif args.embedding_method == "mediapipe":
-                embedding, time_taken = embedding_mediapipe(args.model_path, image_path)
+                embedding, time_taken = mp_embedder.embed_image(image_path)
 
             md5_hash = get_md5_hash(image_path)
             write_to_csv(args.output, image_path, time_taken, md5_hash, embedding)
