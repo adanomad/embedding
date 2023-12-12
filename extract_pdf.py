@@ -8,12 +8,15 @@ import os
 import argparse
 
 
-def extract_images_and_text(pdf_path, output_folder="output"):
+def extract_images_and_text(pdf_path, output_folder):
     # Create the output folder if it doesn't exist
     if not os.path.exists(output_folder):
+        pdf_path_base_path = os.path.dirname(pdf_path)
+        output_folder = os.path.join(pdf_path_base_path, output_folder)
         os.makedirs(output_folder)
 
     # Open the PDF file
+    all_text_file = open(f"{output_folder}/all.txt", "w")
     with fitz.open(pdf_path) as doc:
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
@@ -22,6 +25,7 @@ def extract_images_and_text(pdf_path, output_folder="output"):
             text = page.get_text()
             with open(f"{output_folder}/{page_num + 1}.txt", "w") as text_file:
                 text_file.write(text)
+                all_text_file.write(text)
 
             # Extract images
             image_list = page.get_images(full=True)
@@ -33,12 +37,15 @@ def extract_images_and_text(pdf_path, output_folder="output"):
                 # Save the image
                 with open(f"{output_folder}/{page_num + 1}-{i}.jpg", "wb") as img_file:
                     img_file.write(image_bytes)
+    all_text_file.close()
 
 
 def main():
     parser = argparse.ArgumentParser(description="Extract images and text from a PDF.")
     parser.add_argument("--pdf", type=str, required=True, help="Path to the PDF file")
-    parser.add_argument("--outfolder", type=str, help="Path to the output folder")
+    parser.add_argument(
+        "--outfolder", type=str, default="outfolder", help="Path to the output folder"
+    )
     args = parser.parse_args()
 
     extract_images_and_text(args.pdf, args.outfolder)
