@@ -1,0 +1,86 @@
+digraph BJJTechniques {
+    subgraph cluster_survival {
+        label = "Survival Positions";
+        BackSurvival [label="The Back Survival Position"];
+        AllFoursSurvival [label="Surviving All-Fours Back Position"];
+        MountSurvival [label="Surviving the Mount"];
+        SideControlSurvival [label="Side Control Survival"];
+        KneeOnBellySurvival [label="Knee-on-Belly Survival"];
+    }
+
+    subgraph cluster_escapes {
+        label = "Escapes";
+        EscapeBack [label="Escaping the Back"];
+        EscapeMount [label="Mount Escapes"];
+        EscapeSideControl [label="Side Control Escapes"];
+        EscapeKneeOnBelly [label="Knee-on-Belly Running Escape"];
+        ArmbarEscape [label="Armbar Escapes"];
+        TriangleEscape [label="Triangle Escape to Pass"];
+        GuillotineEscape [label="Guillotine Escapes"];
+        FootlockEscape [label="Footlock Escapes"];
+        KimuraEscape [label="Kimura Escapes"];
+    }
+
+    subgraph cluster_closedguard {
+        label = "Closed Guard (Kneeling Opponent)";
+        ArmWrap [label="Arm Wrap Techniques"];
+        OverwrapToBack [label="Overwrap to Back"];
+        ScissorKneeShield [label="Scissor / Knee Shield"];
+        ClassicArmbarClosedGuard [label="Classic Armbar"];
+        BraboChokeClosedGuard [label="Brabo Choke"];
+        ClassicTriangleClosedGuard [label="Classic Triangle Choke"];
+        HipBumpSweep [label="Hip Bump Sweep"];
+        FlowerSweep [label="Flower Sweep"];
+    }
+
+    subgraph cluster_guard {
+        label = "The Guard";
+        ButterflyGuard [label="Butterfly Guard"];
+        SpiderGuard [label="Spider Guard"];
+        CrossGripGuard [label="Cross-Grip Guard"];
+        DeLaRiva [label="De La Riva"];
+        SitUpGuard [label="Sit-Up Guard"];
+        ReverseDeLaRiva [label="Reverse De La Riva Guard"];
+        HalfGuard [label="Half Guard"];
+    }
+
+    subgraph cluster_submissions {
+        label = "Submissions";
+        SubmissionBack [label="From the Back"];
+        SubmissionMount [label="From the Mount"];
+        SubmissionSideControl [label="Side Control"];
+        SubmissionHalfGuard [label="Half Guard"];
+        SubmissionGuardTop [label="Guard Top (e.g., Straight Ankle Lock)"];
+    }
+
+    BackSurvival -> EscapeBack;
+    AllFoursSurvival -> EscapeBack;
+    MountSurvival -> EscapeMount;
+    SideControlSurvival -> EscapeSideControl;
+    KneeOnBellySurvival -> EscapeKneeOnBelly;
+
+    ArmWrap -> ClassicArmbarClosedGuard;
+    OverwrapToBack -> SubmissionBack;
+    ScissorKneeShield -> FlowerSweep;
+    ClassicArmbarClosedGuard -> BraboChokeClosedGuard;
+    ClassicTriangleClosedGuard -> HipBumpSweep;
+
+    ButterflyGuard -> SubmissionMount;
+    SpiderGuard -> SubmissionSideControl;
+    CrossGripGuard -> SubmissionMount;
+    DeLaRiva -> SitUpGuard;
+    ReverseDeLaRiva -> HalfGuard;
+    HalfGuard -> SubmissionHalfGuard;
+
+    EscapeBack -> ArmbarEscape;
+    EscapeMount -> TriangleEscape;
+    EscapeSideControl -> GuillotineEscape;
+    EscapeKneeOnBelly -> FootlockEscape;
+    ArmbarEscape -> KimuraEscape;
+
+    SubmissionBack -> SubmissionMount;
+    SubmissionMount -> SubmissionSideControl;
+    SubmissionSideControl -> SubmissionHalfGuard;
+    SubmissionHalfGuard -> SubmissionGuardTop;
+
+}
