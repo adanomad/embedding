@@ -1,0 +1,47 @@
+digraph BJJTransitions {
+    rankdir=LR;
+    node [shape=box];
+
+    TheBack [label="The Back"];
+    AllFours [label="All-Fours"];
+    TheMount [label="The Mount"];
+    SideControl [label="Side Control"];
+    KneeOnBelly [label="Knee-on-Belly"];
+    EscapingBack [label="Escaping the Back"];
+    MountEscape [label="Mount Escape"];
+    SideControlEscape [label="Side Control Escape"];
+    ClosedGuard [label="Closed Guard"];
+    GuardPassDefense [label="Guard Pass Defense"];
+
+    TheBack -> EscapingBack;
+    AllFours -> SideControl;
+    TheMount -> MountEscape;
+    SideControl -> SideControlEscape;
+    KneeOnBelly -> MountEscape;
+    EscapingBack -> ClosedGuard;
+    MountEscape -> ClosedGuard;
+    SideControlEscape -> ClosedGuard;
+    ClosedGuard -> GuardPassDefense;
+
+    subgraph cluster_defense {
+        label="Defensive Positions";
+        TheBack;
+        AllFours;
+        TheMount;
+        SideControl;
+        KneeOnBelly;
+    }
+
+    subgraph cluster_escapes {
+        label="Escapes";
+        EscapingBack;
+        MountEscape;
+        SideControlEscape;
+    }
+
+    subgraph cluster_offense {
+        label="Offensive Positions";
+        ClosedGuard;
+        GuardPassDefense;
+    }
+}
