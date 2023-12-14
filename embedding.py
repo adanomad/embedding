@@ -119,9 +119,11 @@ if __name__ == "__main__":
             image_paths = [args.image]
         else:
             # Retrieve all files matching the pattern 
+            pattern = os.path.expanduser(args.image) + '**/*'
             image_paths = [
                 file
-                for file in glob.glob(args.image)
+                for file in glob.glob(pattern, recursive=True)
+                if os.path.isfile(file)  # Ensure that only files are included
             ]
             image_paths.sort()  # Sort the files
         mp_embedder = MediaPipeEmbedder(args.model_path)
@@ -140,5 +142,4 @@ if __name__ == "__main__":
                 f"Processed {idx + 1} of {len(image_paths)} in {time_taken:.2f}s: {image_path}"
             )
 
-    writer.close()
     print(f"Processing complete in {(time.time() - begin_time):.2f}s")
