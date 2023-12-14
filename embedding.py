@@ -19,29 +19,23 @@ import re
 import hashlib
 import mediapipe as mp
 from typing import Tuple
+import glob
 
 
-def get_matching_files(directory, pattern):
-    """
-    Returns a list of file paths in 'directory' that match the 'pattern'.
-    """
-    matching_files = []
-    for f in os.listdir(directory):
-        if re.match(pattern, f):
-            matching_files.append(os.path.join(directory, f))
-    return matching_files
-
-
-def get_md5_hash(file_name: str) -> str:
-    """Generate MD5 hash for a given file."""
+def get_md5_hash_and_size(file_name: str) -> [str, int]:
+    """Generate MD5 hash for a given file and return its size."""
     with open(file_name, "rb") as file:
-        return hashlib.md5(file.read()).hexdigest()
+        file_content = file.read()
+        file_size = os.path.getsize(file_name)
+        md5_hash = hashlib.md5(file_content).hexdigest()
+        return md5_hash, file_size
 
 
-def write_to_csv(file_path, input_data, time_taken, md5_hash, embedding):
-    with open(file_path, mode="a", newline="", encoding="utf-8") as csv_file:
+
+def write_to_csv(file_path, input_data, time_taken, file_size, md5_hash, embedding):
+    with open(file_path, mode='a', newline='', encoding='utf-8') as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow([input_data, time_taken, md5_hash, embedding])
+        writer.writerow([input_data, time_taken, file_size, md5_hash, embedding])
 
 
 def embedding_clip(model, preprocess, device, input_data, is_text=True):
@@ -116,21 +110,24 @@ if __name__ == "__main__":
         embedding, time_taken = embedding_clip(
             model, preprocess, device, args.text, is_text=True
         )
-        write_to_csv(args.output, args.text, time_taken, "N/A", embedding)
+        write_to_csv(args.output, args.text, time_taken, 0, "N/A", embedding)
 
     elif args.image:
         if os.path.isfile(args.image):
             image_paths = [args.image]
         else:
-            directory, pattern = os.path.split(args.image)
-            if not directory:
-                directory = "."
-            image_paths = get_matching_files(directory, pattern)
+            # Retrieve all files matching the pattern 
+            image_paths = [
+                file
+                for file in glob.glob(args.image)
+            ]
+            image_paths.sort()  # Sort the files
+
 
         if not os.path.isfile(args.output):
             with open(args.output, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(["image", "seconds", "md5", "embedding"])
+                writer.writerow(["image", "seconds", "size", "md5", "embedding"])
 
         mp_embedder = MediaPipeEmbedder(args.model_path)
         for idx, image_path in enumerate(image_paths):
@@ -141,8 +138,8 @@ if __name__ == "__main__":
             elif args.embedding_method == "mediapipe":
                 embedding, time_taken = mp_embedder.embed_image(image_path)
 
-            md5_hash = get_md5_hash(image_path)
-            write_to_csv(args.output, image_path, time_taken, md5_hash, embedding)
+            md5_hash, file_size = get_md5_hash_and_size(image_path)
+            write_to_csv(args.output, image_path, time_taken, file_size, md5_hash, embedding)
             print(
                 f"Processed {idx + 1} of {len(image_paths)} in {time_taken:.2f}s: {image_path}"
             )
