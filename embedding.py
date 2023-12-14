@@ -3,7 +3,7 @@
 # Usage:
 # python embedding.py --text "a sleepy ridgeback dog"
 # python embedding.py --image "./images/*.jpg" --output output.csv
-# python embedding.py --image "path/to/image.jpg" --output output.csv --embedding_method mediapipe
+# python embedding.py --image "path/to/image.jpg" --output output.csv --method mediapipe
 
 # CLIP embedder runs faster (10ms) than the MediaPipe embedder (50ms) when CUDA is available.
 # When CUDA is not available, CLIP embedder runs slower (3s).
@@ -15,7 +15,6 @@ import clip
 import torch
 import time
 import os
-import re
 import hashlib
 import mediapipe as mp
 from typing import Tuple
@@ -32,10 +31,7 @@ def get_md5_hash_and_size(file_name: str) -> [str, int]:
 
 
 
-def write_to_csv(file_path, input_data, time_taken, file_size, md5_hash, embedding):
-    with open(file_path, mode='a', newline='', encoding='utf-8') as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow([input_data, time_taken, file_size, md5_hash, embedding])
+# def write_to_csv(file_path, input_data, time_taken, file_size, md5_hash, embedding):
 
 
 def embedding_clip(model, preprocess, device, input_data, is_text=True):
@@ -87,7 +83,7 @@ if __name__ == "__main__":
     group.add_argument("--image", required=False)
     parser.add_argument("--output", default="clip.csv", help="Output CSV file path")
     parser.add_argument(
-        "--embedding_method",
+        "--method",
         default="clip",
         choices=["clip", "mediapipe"],
         help="Choose embedding method: clip or mediapipe",
@@ -106,11 +102,17 @@ if __name__ == "__main__":
     model.to(device)
 
     begin_time = time.time()
+    csv_exists = os.path.isfile(args.output)
+    writer = csv.writer(open(args.output, mode='a', newline='', encoding='utf-8'))
+    if not csv_exists:
+        writer.writerow(["image", "seconds", "size", "md5", "method", "embedding"])
+
     if args.text:
         embedding, time_taken = embedding_clip(
             model, preprocess, device, args.text, is_text=True
         )
-        write_to_csv(args.output, args.text, time_taken, 0, "N/A", embedding)
+        writer.writerow([args.text, time_taken, 0, "", embedding])
+
 
     elif args.image:
         if os.path.isfile(args.image):
@@ -122,26 +124,21 @@ if __name__ == "__main__":
                 for file in glob.glob(args.image)
             ]
             image_paths.sort()  # Sort the files
-
-
-        if not os.path.isfile(args.output):
-            with open(args.output, "w", newline="") as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(["image", "seconds", "size", "md5", "embedding"])
-
         mp_embedder = MediaPipeEmbedder(args.model_path)
         for idx, image_path in enumerate(image_paths):
-            if args.embedding_method == "clip":
+            if args.method == "clip":
                 embedding, time_taken = embedding_clip(
                     model, preprocess, device, image_path
                 )
-            elif args.embedding_method == "mediapipe":
+            elif args.method == "mediapipe":
                 embedding, time_taken = mp_embedder.embed_image(image_path)
 
             md5_hash, file_size = get_md5_hash_and_size(image_path)
-            write_to_csv(args.output, image_path, time_taken, file_size, md5_hash, embedding)
+            writer.writerow([image_path, time_taken, file_size, md5_hash, args.method, embedding])
+
             print(
                 f"Processed {idx + 1} of {len(image_paths)} in {time_taken:.2f}s: {image_path}"
             )
 
+    writer.close()
     print(f"Processing complete in {(time.time() - begin_time):.2f}s")
