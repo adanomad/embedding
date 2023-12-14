@@ -2,10 +2,12 @@
 # uses the MediaPipe Pose Landmarker task to detect pose landmarks,
 # and outputs the results.
 
-
-import mediapipe as mp
+import json
 import sys
-
+import time
+import mediapipe as mp
+import argparse
+import glob
 from mediapipe import solutions
 from mediapipe.framework.formats import landmark_pb2
 import numpy as np
@@ -13,41 +15,57 @@ import cv2
 
 model_path = "pose_landmarker_lite.task"
 
+# Initialize the pose detector
+BaseOptions = mp.tasks.BaseOptions
+PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+VisionRunningMode = mp.tasks.vision.RunningMode
+
+options = PoseLandmarkerOptions(
+    base_options=BaseOptions(model_asset_path=model_path),
+    running_mode=VisionRunningMode.IMAGE,
+    output_segmentation_masks=True,
+    num_poses=10,  # maximum number of poses that can be detected
+)
+
+detector = mp.tasks.vision.PoseLandmarker.create_from_options(options)
+
 
 def detect_pose(image_path):
-    BaseOptions = mp.tasks.BaseOptions
-    PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
-    VisionRunningMode = mp.tasks.vision.RunningMode
-
-    options = PoseLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=model_path),
-        running_mode=VisionRunningMode.IMAGE,
-        output_segmentation_masks=True,
-    )
-
-    detector = mp.tasks.vision.PoseLandmarker.create_from_options(options)
+    start_time = time.time()
     mp_image = mp.Image.create_from_file(image_path)
     detection_result = detector.detect(mp_image)
     if detection_result.pose_landmarks:
-        print("Pose landmarks detected:")
+        print(f"Pose landmarks detected in {image_path}")
         annotated_image = draw_landmarks_on_image(
             mp_image.numpy_view(), detection_result
         )
-        # Visualize the pose landmarks on the image.
-        cv2.imshow("Annotated Image", cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
-        cv2.waitKey(0)  # Wait for a key press to close the window
 
-        # Check if segmentation masks are available
-        if detection_result.segmentation_masks:
-            segmentation_mask = detection_result.segmentation_masks[0].numpy_view()
-            visualized_mask = (
-                np.repeat(segmentation_mask[:, :, np.newaxis], 3, axis=2) * 255
-            )
-            cv2.imshow("Segmentation Mask", visualized_mask)
-            cv2.waitKey(0)  # Wait for a key press to close the window
+        # Save the annotated image
+        cv2.imwrite(
+            image_path.replace(".jpg", ".pose.jpg"),
+            cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR),
+        )
+
+        # Process and save landmarks and world landmarks as JSON
+        landmarks_data = {
+            "landmarks": [
+                {"x": lm.x, "y": lm.y, "z": lm.z, "visibility": lm.visibility}
+                for pose_landmarks in detection_result.pose_landmarks
+                for lm in pose_landmarks
+            ],
+        }
+
+        json_path = image_path.replace(".jpg", ".json")
+        with open(json_path, "w") as json_file:
+            json.dump(landmarks_data, json_file)
+
+        print(f"Landmark data saved to {json_path}")
 
     else:
-        print("No pose landmarks detected.")
+        print(f"No pose landmarks detected in {image_path}.")
+
+    time_taken = time.time() - start_time
+    print(f"{image_path}: {time_taken:.2f} seconds")
 
 
 def draw_landmarks_on_image(rgb_image, detection_result):
@@ -78,9 +96,28 @@ def draw_landmarks_on_image(rgb_image, detection_result):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python pose_landmark_detector.py <image_path>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Pose Landmark Detector")
+    parser.add_argument("--image", help="Path to an image file")
+    parser.add_argument("--pattern", help="Glob pattern for images (e.g., ./*.jpg)")
+    args = parser.parse_args()
 
-    image_path = sys.argv[1]
-    detect_pose(image_path)
+    if args.image:
+        detect_pose(args.image)
+    elif args.pattern:
+        # Retrieve all files matching the pattern and filter out .mask. and .pose.
+        image_files = [
+            file
+            for file in glob.glob(args.pattern)
+            if ".mask." not in file and ".pose." not in file
+        ]
+        image_files.sort()  # Sort the files
+
+        # Process each image in sorted order
+        for image_file in image_files:
+            detect_pose(image_file)
+
+    else:
+        print(
+            "No input provided. Use --image for a single image or --pattern for a glob pattern of images."
+        )
+        sys.exit(1)
