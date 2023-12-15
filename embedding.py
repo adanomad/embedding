@@ -19,6 +19,33 @@ import hashlib
 import mediapipe as mp
 from typing import Tuple
 import glob
+import sqlite3
+
+
+def create_database(db_name):
+    conn = sqlite3.connect(db_name)
+    cur = conn.cursor()
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS embeddings
+                   (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    data TEXT, 
+                    seconds REAL, 
+                    size INTEGER, 
+                    md5 TEXT, 
+                    method TEXT, 
+                    embedding TEXT)"""
+    )
+    conn.commit()
+    return conn
+
+
+def insert_into_db(conn, data, seconds, size, md5, method, embedding):
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO embeddings (data, seconds, size, md5, method, embedding) VALUES (?, ?, ?, ?, ?, ?)",
+        (data, seconds, size, md5, method, str(embedding)),
+    )
+    conn.commit()
 
 
 def get_md5_hash_and_size(file_name: str) -> [str, int]:
@@ -91,6 +118,7 @@ def setup_parser():
     )
     return parser.parse_args()
 
+
 def initialize_embedding_environment():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"using {device}")
@@ -99,21 +127,24 @@ def initialize_embedding_environment():
     model.to(device)
     return device, model, preprocess
 
-def process_text_embedding(args, writer, model, preprocess, device):
+
+def process_text_embedding(args, conn, model, preprocess, device):
     embedding, time_taken = embedding_clip(
         model, preprocess, device, args.text, is_text=True
     )
-    writer.writerow([args.text, time_taken, 0, "", args.method, embedding])
+    insert_into_db(conn, args.text, time_taken, 0, "", args.method, embedding)
+
 
 def process_image_paths(image_arg):
     if os.path.isfile(image_arg):
         return [image_arg]
-    pattern = os.path.expanduser(image_arg) + '**/*'
+    pattern = os.path.expanduser(image_arg) + "**/*"
     return sorted(
         [file for file in glob.glob(pattern, recursive=True) if os.path.isfile(file)]
     )
 
-def process_image_embedding(args, writer, model, preprocess, device, mp_embedder):
+
+def process_image_embedding(args, conn, model, preprocess, device, mp_embedder):
     image_paths = process_image_paths(args.image)
     for idx, image_path in enumerate(image_paths):
         if args.method == "clip":
@@ -123,28 +154,30 @@ def process_image_embedding(args, writer, model, preprocess, device, mp_embedder
         elif args.method == "mediapipe":
             embedding, time_taken = mp_embedder.embed_image(image_path)
         md5_hash, file_size = get_md5_hash_and_size(image_path)
-        writer.writerow([image_path, time_taken, file_size, md5_hash, args.method, embedding])
+        insert_into_db(
+            conn, image_path, time_taken, file_size, md5_hash, args.method, embedding
+        )
         print(
             f"Processed {idx + 1} of {len(image_paths)} in {time_taken:.2f}s: {image_path}"
         )
 
+
 def main():
     args = setup_parser()
     device, model, preprocess = initialize_embedding_environment()
+    conn = create_database("embeddings.db")
 
     begin_time = time.time()
-    csv_exists = os.path.isfile(args.output)
-    writer = csv.writer(open(args.output, mode='a', newline='', encoding='utf-8'))
-    if not csv_exists:
-        writer.writerow(["image", "seconds", "size", "md5", "method", "embedding"])
 
     if args.text:
-        process_text_embedding(args, writer, model, preprocess, device)
+        process_text_embedding(args, conn, model, preprocess, device)
     elif args.image:
         mp_embedder = MediaPipeEmbedder(args.model_path)
-        process_image_embedding(args, writer, model, preprocess, device, mp_embedder)
+        process_image_embedding(args, conn, model, preprocess, device, mp_embedder)
 
+    conn.close()
     print(f"Processing complete in {(time.time() - begin_time):.2f}s")
+
 
 if __name__ == "__main__":
     main()
