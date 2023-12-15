@@ -30,10 +30,6 @@ def get_md5_hash_and_size(file_name: str) -> [str, int]:
         return md5_hash, file_size
 
 
-
-# def write_to_csv(file_path, input_data, time_taken, file_size, md5_hash, embedding):
-
-
 def embedding_clip(model, preprocess, device, input_data, is_text=True):
     start_time = time.time()
     with torch.no_grad():
@@ -74,7 +70,7 @@ class MediaPipeEmbedder:
         return list(vector), end_time - start_time
 
 
-if __name__ == "__main__":
+def setup_parser():
     parser = argparse.ArgumentParser(
         prog="generate", description="Generate embeddings for images or text"
     )
@@ -93,13 +89,48 @@ if __name__ == "__main__":
         default="mobilenet_v3_large.tflite",
         help="Path to the model file for MediaPipe",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
+def initialize_embedding_environment():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"using {device}")
     device = torch.device(device)
     model, preprocess = clip.load("ViT-L/14")
     model.to(device)
+    return device, model, preprocess
+
+def process_text_embedding(args, writer, model, preprocess, device):
+    embedding, time_taken = embedding_clip(
+        model, preprocess, device, args.text, is_text=True
+    )
+    writer.writerow([args.text, time_taken, 0, "", args.method, embedding])
+
+def process_image_paths(image_arg):
+    if os.path.isfile(image_arg):
+        return [image_arg]
+    pattern = os.path.expanduser(image_arg) + '**/*'
+    return sorted(
+        [file for file in glob.glob(pattern, recursive=True) if os.path.isfile(file)]
+    )
+
+def process_image_embedding(args, writer, model, preprocess, device, mp_embedder):
+    image_paths = process_image_paths(args.image)
+    for idx, image_path in enumerate(image_paths):
+        if args.method == "clip":
+            embedding, time_taken = embedding_clip(
+                model, preprocess, device, image_path
+            )
+        elif args.method == "mediapipe":
+            embedding, time_taken = mp_embedder.embed_image(image_path)
+        md5_hash, file_size = get_md5_hash_and_size(image_path)
+        writer.writerow([image_path, time_taken, file_size, md5_hash, args.method, embedding])
+        print(
+            f"Processed {idx + 1} of {len(image_paths)} in {time_taken:.2f}s: {image_path}"
+        )
+
+def main():
+    args = setup_parser()
+    device, model, preprocess = initialize_embedding_environment()
 
     begin_time = time.time()
     csv_exists = os.path.isfile(args.output)
@@ -108,38 +139,12 @@ if __name__ == "__main__":
         writer.writerow(["image", "seconds", "size", "md5", "method", "embedding"])
 
     if args.text:
-        embedding, time_taken = embedding_clip(
-            model, preprocess, device, args.text, is_text=True
-        )
-        writer.writerow([args.text, time_taken, 0, "", embedding])
-
-
+        process_text_embedding(args, writer, model, preprocess, device)
     elif args.image:
-        if os.path.isfile(args.image):
-            image_paths = [args.image]
-        else:
-            # Retrieve all files matching the pattern 
-            pattern = os.path.expanduser(args.image) + '**/*'
-            image_paths = [
-                file
-                for file in glob.glob(pattern, recursive=True)
-                if os.path.isfile(file)  # Ensure that only files are included
-            ]
-            image_paths.sort()  # Sort the files
         mp_embedder = MediaPipeEmbedder(args.model_path)
-        for idx, image_path in enumerate(image_paths):
-            if args.method == "clip":
-                embedding, time_taken = embedding_clip(
-                    model, preprocess, device, image_path
-                )
-            elif args.method == "mediapipe":
-                embedding, time_taken = mp_embedder.embed_image(image_path)
-
-            md5_hash, file_size = get_md5_hash_and_size(image_path)
-            writer.writerow([image_path, time_taken, file_size, md5_hash, args.method, embedding])
-
-            print(
-                f"Processed {idx + 1} of {len(image_paths)} in {time_taken:.2f}s: {image_path}"
-            )
+        process_image_embedding(args, writer, model, preprocess, device, mp_embedder)
 
     print(f"Processing complete in {(time.time() - begin_time):.2f}s")
+
+if __name__ == "__main__":
+    main()
