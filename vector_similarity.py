@@ -1,9 +1,8 @@
-# python vector_similarity.py path_to_your_csv_file.csv
-
 import csv
 import numpy as np
 import argparse
 import os
+import shutil
 
 def read_csv(file_path):
     with open(file_path, newline='', encoding='utf-8') as csvfile:
@@ -20,10 +19,11 @@ def cosine_similarity(vec1, vec2):
     norm_vec2 = np.linalg.norm(vec2)
     return dot_product / (norm_vec1 * norm_vec2)
 
-def write_suggestions(suggestions, output_file):
-    with open(output_file, 'w') as file:
-        for suggestion in suggestions:
-            file.write(suggestion + '\n')
+def move_files(suggestions, target_dir):
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+    for file_name in suggestions:
+        shutil.move(file_name, os.path.join(target_dir, os.path.basename(file_name)))
 
 def process_csv(file_path, threshold):
     rows = read_csv(file_path)
@@ -43,14 +43,13 @@ def process_csv(file_path, threshold):
                 suggestions.append(rows[i]['image'])
 
     if suggestions:
-        base_name = os.path.splitext(os.path.basename(file_path))[0]
-        output_file = os.path.join(os.path.dirname(file_path), base_name + '.txt')
-        write_suggestions(suggestions, output_file)
+        target_dir = os.path.join(os.path.dirname(file_path), 'similar')
+        move_files(suggestions, target_dir)
 
 def main():
     parser = argparse.ArgumentParser(description="Process a CSV file and output suggestions for deletion based on file size and embedding similarity.")
     parser.add_argument('file_path', type=str, help="Path to the CSV file")
-    parser.add_argument('--threshold', type=float, help="Threshold for similarity", default=0.99)
+    parser.add_argument('--threshold', type=float, help="Threshold for similarity", default=1.00)
     args = parser.parse_args()
 
     process_csv(args.file_path, args.threshold)
