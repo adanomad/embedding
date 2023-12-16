@@ -1,0 +1,85 @@
+import weaviate
+
+
+class WeaviateEmbeddingStore:
+    def __init__(self, weaviate_url):
+        self.client = weaviate.Client(weaviate_url)
+
+    def store_embedding(self, file_name, md5_hash, file_size, model_name, embedding):
+        data_object = {
+            "fileName": file_name,
+            "md5Hash": md5_hash,
+            "fileSize": file_size,
+            "modelName": model_name,
+        }
+        self.client.data_object.create(data_object, "FileEmbedding", vector=embedding)
+
+    def get_nearest_neighbors(self, embedding, max_results=5):
+        nearest_neighbors = (
+            self.client.query.get(
+                "FileEmbedding",
+                ["fileName", "md5Hash", "fileSize", "modelName"],
+            )
+            .with_near_vector({"vector": embedding})
+            .with_limit(max_results)
+            .do()
+        )
+        return nearest_neighbors
+
+    def delete_embedding(self, md5_hash):
+        # Construct a query to find the object by md5Hash
+        result = self.client.batch.delete_objects(
+            class_name="FileEmbedding",
+            where={
+                "path": ["md5Hash"],
+                "operator": "ContainsAny",
+                "valueTextArray": [md5_hash],
+            },
+        )
+
+
+# Usage Example
+weaviate_url = "http://henderson:8080"
+print("Connecting to Weaviate at", weaviate_url)
+store = WeaviateEmbeddingStore(weaviate_url)
+
+# Example data (replace with actual values)
+file_name = "example.jpg"
+md5_hash = "abc123"
+file_size = 1024
+model_name = "example_model"
+# you can choose any embedding you want, or let your model generate one
+embedding = [0.1, 0.2, 0.3]
+
+# Store embedding (works)
+store.store_embedding(file_name, md5_hash, file_size, model_name, embedding)
+
+# Retrieve nearest neighbors
+neighbors = store.get_nearest_neighbors(embedding)
+print("neighbors", neighbors)
+
+# Raw
+query = """
+{
+  Get {
+    FileEmbedding {
+      fileName
+      md5Hash
+      fileSize
+      modelName
+    }
+  }
+}
+"""
+
+raw_all = store.client.query.raw(query)
+print("raw_all", raw_all)
+
+# Delete
+store.delete_embedding(md5_hash)
+print("Deleted")
+
+raw_all = store.client.query.raw(query)
+print(raw_all)
+
+print("Done")
