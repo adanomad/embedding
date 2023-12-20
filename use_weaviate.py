@@ -4,6 +4,7 @@ import weaviate
 
 class WeaviateEmbeddingStore:
     def __init__(self, weaviate_url):
+        self.weaviate_url = weaviate_url
         self.client = weaviate.Client(weaviate_url)
 
     def store_embedding(self, file_name, md5_hash, file_size, model_name, embedding):
@@ -38,6 +39,8 @@ class WeaviateEmbeddingStore:
             },
         )
 
+    def delete_all_embeddings(self):
+        self.client.schema.delete_class("FileEmbedding")
 
     def check_md5_exists(self, md5_hash, model_name):
         start_time = time.time()
@@ -50,10 +53,14 @@ class WeaviateEmbeddingStore:
             }}
         }}
         """
-        result = self.client.query.raw(query)
-        duration = time.time() - start_time
-        exists = bool(result['data']['Get']['FileEmbedding'])
-        return exists, duration
+        try:
+            result = self.client.query.raw(query)
+            duration = time.time() - start_time
+            exists = bool(result["data"]["Get"]["FileEmbedding"])
+            return exists, duration
+        except weaviate.exceptions.UnexpectedStatusCodeException as e:
+            print(f"info: {e}")
+            return False, 0
 
     def check_multiple_md5_exists(self, md5_hashes, model_name):
         start_time = time.time()
@@ -116,8 +123,14 @@ print(f"Total Query Time for Multiple MD5s: {total_query_time} seconds")
 
 
 # Delete
-store.delete_embedding(md5_hash)
-print("Deleted")
+store.delete_all_embeddings()
+
+raw_all = store.client.query.raw(query)
+print(raw_all)
+
+# Drop class
+store.client.schema.delete_class("FileEmbedding")
+print("Dropped FileEmbedding Class")
 
 raw_all = store.client.query.raw(query)
 print(raw_all)
