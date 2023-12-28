@@ -4,6 +4,7 @@
 # 1. /embed: Takes a text input and returns the CLIP embedding
 # 2. /image: Takes a filename and returns the image
 
+import glob
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import torch
@@ -24,7 +25,7 @@ device = torch.device(device)
 model, preprocess = clip.load("ViT-L/14", device=device)
 
 
-@app.route('/embed', methods=['POST'])
+@app.route("/embed", methods=["POST"])
 def get_embedding():
     data = request.json
     input_text = data.get("text")
@@ -36,14 +37,14 @@ def get_embedding():
     with torch.no_grad():
         inputs = clip.tokenize([input_text]).to(device)
         embedding = model.encode_text(inputs)
-        embedding_list = embedding[0].cpu().numpy().tolist()  # Convert to list
+        embedding_list = embedding[0].cpu().numpy().tolist()
 
     return jsonify({"embedding": embedding_list})
 
 
-@app.route('/image', methods=['GET'])
+@app.route("/image", methods=["GET"])
 def get_image():
-    filename = request.args.get('fileName')
+    filename = request.args.get("fileName")
 
     if not filename:
         return jsonify({"error": "No fileName provided"}), 400
@@ -55,8 +56,29 @@ def get_image():
     if not os.path.exists(image_path):
         return jsonify({"error": "File not found"}), 404
 
-    return send_file(image_path, mimetype='image/jpeg')
+    return send_file(image_path, mimetype="image/jpeg")
+
+
+@app.route("/list_files_by_date", methods=["GET"])
+def list_files_by_date():
+    filename = request.args.get("fileName")
+
+    if not filename or len(filename) < 8:
+        return jsonify({"error": "Invalid or no fileName provided"}), 400
+
+    # Extract date from filename and construct the path
+    date_folder = filename[:8]  # Assuming date is in 'YYYYMMDD' format
+    directory_path = f"/mnt/datahaus-jason/ss/{date_folder}/"
+
+    if not os.path.exists(directory_path):
+        return jsonify({"error": "Directory not found"}), 404
+
+    # List all files in the directory
+    files = [f for f in glob.glob(directory_path + "*") if os.path.isfile(f)]
+    file_names = [os.path.basename(f) for f in files]
+
+    return jsonify({"files": file_names})
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
