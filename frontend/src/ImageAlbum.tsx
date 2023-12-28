@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Card, Image } from "@mantine/core";
+import { Card, Image, Text } from "@mantine/core";
 import axios from "axios";
 
 interface ImageAlbumProps {
@@ -45,11 +45,15 @@ const ImageAlbum: React.FC<ImageAlbumProps> = ({
     <div>
       {images.map((image, index) => (
         <Card key={index}>
+          <Text>
+            {image} ({index + 1} of {images.length})
+          </Text>
           <Image
-            src={`${flaskEndpoint}${image}`}
+            src={`${flaskEndpoint}/image?fileName=${image}`}
             alt={image}
-            width={400}
-            height={400}
+            width={600}
+            height={600}
+            loading="lazy"
           />
         </Card>
       ))}

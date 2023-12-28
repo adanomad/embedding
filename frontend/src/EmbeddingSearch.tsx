@@ -13,6 +13,8 @@ import {
 import { usePagination } from "@mantine/hooks";
 import { client } from "./weaviateClient";
 import SearchResultCard from "./SearchResultCard";
+import ImageAlbum from "./ImageAlbum";
+import { Modal } from "@mantine/core";
 
 interface SearchResult {
   fileName: string;
@@ -29,6 +31,15 @@ const EmbeddingSearch = () => {
   const [totalPages, setTotalPages] = useState(0);
   // setTotalPages doesn't work because we don't know the total number of results - need estimate
   const limit = 5;
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [showAlbum, setShowAlbum] = useState(false);
+
+  const handleViewAlbum = (date: string) => {
+    setSelectedDate(date);
+    setIsModalOpen(true);
+  };
 
   const fetchSearchResults = async (embedding: number[], page: number) => {
     try {
@@ -79,8 +90,6 @@ const EmbeddingSearch = () => {
     }
   };
 
-  const flaskEndpoint = "http://glassbox.ds:5000/image?fileName=";
-
   return (
     <Card shadow="sm" padding="lg">
       <TextInput
@@ -108,11 +117,24 @@ const EmbeddingSearch = () => {
                 key={index}
                 fileName={item.fileName}
                 distance={item._additional.distance}
-                flaskEndpoint={flaskEndpoint}
-                index={index}
+                flaskEndpoint="http://glassbox.ds:5000/image?fileName="
+                onViewAlbum={handleViewAlbum}
               />
             )
           )}
+          {/* Modal for ImageAlbum */}
+          <Modal
+            opened={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            title={`Images from ${selectedDate}`}
+            size="xl"
+          >
+            <ImageAlbum
+              searchDate={selectedDate}
+              flaskEndpoint="http://glassbox.ds:5000/"
+            />
+          </Modal>
+
           <Pagination
             value={activePage}
             total={totalPages}
