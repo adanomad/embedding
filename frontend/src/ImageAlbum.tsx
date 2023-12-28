@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Card, Image, Text } from "@mantine/core";
+import { Card, Text } from "@mantine/core";
 import axios from "axios";
+import ImageCard from "./ImageCard";
 
 interface ImageAlbumProps {
   searchDate: string; // In 'YYYYMMDD' format
@@ -46,15 +47,9 @@ const ImageAlbum: React.FC<ImageAlbumProps> = ({
       {images.map((image, index) => (
         <Card key={index}>
           <Text>
-            {image} ({index + 1} of {images.length})
+            ({index + 1} of {images.length})
           </Text>
-          <Image
-            src={`${flaskEndpoint}/image?fileName=${image}`}
-            alt={image}
-            width={600}
-            height={600}
-            loading="lazy"
-          />
+          <ImageCard flaskEndpoint={flaskEndpoint} fileName={image} />{" "}
         </Card>
       ))}
     </div>

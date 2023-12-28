@@ -12,6 +12,7 @@ import clip
 from PIL import Image
 import time
 import os
+import io
 
 
 app = Flask(__name__)
@@ -78,6 +79,35 @@ def list_files_by_date():
     file_names = [os.path.basename(f) for f in files]
 
     return jsonify({"files": file_names})
+
+
+def create_thumbnail(image_path, max_size=(600, 600)):
+    with Image.open(image_path) as img:
+        img.thumbnail(max_size)
+        byte_arr = io.BytesIO()
+        img.save(byte_arr, format="JPEG")
+        byte_arr = byte_arr.getvalue()
+    return byte_arr
+
+
+# users will initially view thumbnails and can opt to see the full-size image on demand.
+# Generating thumbnails on the fly for each request might not be efficient for a production server with high traffic.
+# Ideally generating and caching thumbnails ahead of time.
+@app.route("/thumbnail", methods=["GET"])
+def get_thumbnail():
+    filename = request.args.get("fileName")
+
+    if not filename:
+        return jsonify({"error": "No fileName provided"}), 400
+
+    date_folder = filename[:8]
+    image_path = f"/mnt/datahaus-jason/ss/{date_folder}/{filename}"
+
+    if not os.path.exists(image_path):
+        return jsonify({"error": "File not found"}), 404
+
+    thumbnail = create_thumbnail(image_path)
+    return send_file(io.BytesIO(thumbnail), mimetype="image/jpeg")
 
 
 if __name__ == "__main__":
