@@ -12,6 +12,7 @@ import {
 } from "@mantine/core";
 import { usePagination } from "@mantine/hooks";
 import { client } from "./weaviateClient";
+import SearchResultCard from "./SearchResultCard";
 
 interface SearchResult {
   fileName: string;
@@ -103,18 +104,13 @@ const EmbeddingSearch = () => {
               item: { fileName: string; _additional: { distance: number } },
               index: number
             ) => (
-              <Card key={index}>
-                <Anchor href={`${flaskEndpoint}${item.fileName}`}>
-                  {index} File Name: {item.fileName}
-                </Anchor>
-                <Text>Distance: {item._additional.distance.toFixed(4)}</Text>
-                <Image
-                  src={`${flaskEndpoint}${item.fileName}`}
-                  alt={item.fileName}
-                  width={400}
-                  height={400}
-                />
-              </Card>
+              <SearchResultCard
+                key={index}
+                fileName={item.fileName}
+                distance={item._additional.distance}
+                flaskEndpoint={flaskEndpoint}
+                index={index}
+              />
             )
           )}
           <Pagination
