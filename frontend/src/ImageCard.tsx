@@ -23,53 +23,75 @@ const ImageCard: React.FC<ImageCardProps> = ({
     ? `${flaskEndpoint}/image?fileName=${fileName}`
     : `${flaskEndpoint}/thumbnail?fileName=${fileName}`;
 
-  // Function to extract date from fileName
   const extractDateFromFileName = (fileName: string): string => {
     return fileName.substring(0, 8); // Assuming 'YYYYMMDD' format
   };
 
+  const formattedDateFromFileName = (fileName: string): string => {
+    // Assuming 'YYYYMMDD' format in filename
+    const year = fileName.substring(0, 4);
+    const month = fileName.substring(4, 6);
+    const day = fileName.substring(6, 8);
+
+    const date = new Date(`${year}-${month}-${day}`);
+    const formattedDate = `${year}-${month}-${day}`;
+
+    // Calculate days ago
+    const today = new Date();
+    const differenceInTime = today.getTime() - date.getTime();
+    const differenceInDays = Math.floor(differenceInTime / (1000 * 3600 * 24));
+
+    return `${formattedDate} (${differenceInDays} days ago)`;
+  };
+
   const extractedDate = extractDateFromFileName(fileName);
+  const formattedDate = formattedDateFromFileName(fileName);
 
   return (
-    <Card>
-      <Image
-        src={imageUrl}
-        alt={fileName}
-        width={600}
-        height={600}
-        loading="lazy"
-      />
+    <Card shadow="sm" padding="lg">
+      <Anchor
+        href={`${flaskEndpoint}/image?fileName=${fileName}`}
+        target="_blank"
+      >
+        <Image
+          src={imageUrl}
+          alt={`View ${fileName}`}
+          width={600}
+          height={400}
+          loading="lazy"
+          style={{ cursor: "pointer" }}
+        />
+      </Anchor>
 
-      <Group style={{ marginTop: "1rem", flexWrap: "wrap" }}>
-        <Anchor href={`${flaskEndpoint}${fileName}`} style={{ flexGrow: 1 }}>
-          {fileName}
-        </Anchor>
+      <Group style={{ marginTop: "1rem", justifyContent: "space-between" }}>
+        <Text>{fileName}</Text>
+        <Text size="sm">Similarity Distance: {distance?.toFixed(3)}</Text>
+      </Group>
 
-        <Text style={{ flexGrow: 1 }}>{distance?.toFixed(3)}</Text>
-
+      <Group style={{ marginTop: "0.5rem" }}>
         <Button
-          variant="subtle"
+          variant="outline"
           onClick={() => handleFindSimilar(id)}
-          style={{ flexGrow: 1 }}
+          size="xs"
         >
-          Similar
+          Find Similar Images
         </Button>
 
         <Button
-          variant="subtle"
+          variant="outline"
           onClick={() => setViewFullSize(!viewFullSize)}
-          style={{ flexGrow: 1 }}
+          size="xs"
         >
-          {viewFullSize ? "Thumbnail" : "Full"}
+          {viewFullSize ? "Show Thumbnail" : "Show Full Size"}
         </Button>
 
         {onViewAlbum && (
           <Button
-            variant="subtle"
+            variant="outline"
             onClick={() => onViewAlbum(extractedDate)}
-            style={{ flexGrow: 1 }}
+            size="xs"
           >
-            Date {extractedDate}
+            View Images from {formattedDate}
           </Button>
         )}
       </Group>
