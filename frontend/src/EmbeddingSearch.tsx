@@ -1,24 +1,15 @@
 // src/EmbeddingSearch.jsx
 import { useState } from "react";
 import axios from "axios";
-import {
-  Anchor,
-  Text,
-  TextInput,
-  Button,
-  Card,
-  Image,
-  Pagination,
-} from "@mantine/core";
-import { usePagination } from "@mantine/hooks";
+import { TextInput, Button, Card, Pagination } from "@mantine/core";
 import { client } from "./weaviateClient";
-import SearchResultCard from "./SearchResultCard";
+import ImageCard from "./ImageCard";
 import ImageAlbum from "./ImageAlbum";
 import { Modal } from "@mantine/core";
 
 interface SearchResult {
   fileName: string;
-  _additional: { distance: number };
+  _additional: { distance: number; id: string };
 }
 
 const EmbeddingSearch = () => {
@@ -34,7 +25,6 @@ const EmbeddingSearch = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
-  const [showAlbum, setShowAlbum] = useState(false);
 
   const handleViewAlbum = (date: string) => {
     setSelectedDate(date);
@@ -50,7 +40,7 @@ const EmbeddingSearch = () => {
         .withNearVector({ vector: embedding }) //distance: 0.68
         .withLimit(limit)
         .withOffset(offset)
-        .withFields("fileName _additional { distance }")
+        .withFields("fileName _additional { id distance }")
         // .withAutocut(1)
         .do();
 
@@ -59,9 +49,30 @@ const EmbeddingSearch = () => {
       setSearchResults(reversedResults);
 
       // Calculate total pages if you have that information
-      // setTotalPages(calculatedTotalPages);
+      setTotalPages(5);
     } catch (err) {
       console.error("Error fetching embedding:", err);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleFindSimilar = async (id: string) => {
+    try {
+      setInputText("");
+
+      const results = await client.graphql
+        .get()
+        .withClassName("FileEmbedding")
+        .withNearObject({ id })
+        .withLimit(5)
+        .withFields("fileName _additional { id distance }")
+        .do();
+
+      // Reversing the order of search results
+      const reversedResults = results.data.Get.FileEmbedding.slice().reverse();
+      setSearchResults(reversedResults);
+    } catch (err) {
+      console.error("Error handleFindSimilar:", err);
       setError(err instanceof Error ? err.message : String(err));
     }
   };
@@ -105,23 +116,20 @@ const EmbeddingSearch = () => {
       <Button onClick={handleSearch}>Get Embedding and Search</Button>
 
       {loading && <p>Loading...</p>}
-      {error && <p>Error: {error.message}</p>}
+      {error && <p>Error: {error}</p>}
       {searchResults && (
         <Card>
-          {searchResults.map(
-            (
-              item: { fileName: string; _additional: { distance: number } },
-              index: number
-            ) => (
-              <SearchResultCard
-                key={index}
-                fileName={item.fileName}
-                distance={item._additional.distance}
-                flaskEndpoint="http://glassbox.ds:5000/image?fileName="
-                onViewAlbum={handleViewAlbum}
-              />
-            )
-          )}
+          {searchResults.map((item: SearchResult, index: number) => (
+            <ImageCard
+              id={item._additional.id}
+              key={index}
+              fileName={item.fileName}
+              distance={item._additional.distance}
+              flaskEndpoint="http://glassbox.ds:5000"
+              onViewAlbum={handleViewAlbum}
+              handleFindSimilar={handleFindSimilar}
+            />
+          ))}
           {/* Modal for ImageAlbum */}
           <Modal
             opened={isModalOpen}

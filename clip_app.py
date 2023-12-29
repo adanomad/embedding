@@ -10,7 +10,6 @@ from flask_cors import CORS
 import torch
 import clip
 from PIL import Image
-import time
 import os
 import io
 
