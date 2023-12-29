@@ -47,8 +47,7 @@ const EmbeddingSearch = () => {
       // Reversing the order of search results
       const reversedResults = results.data.Get.FileEmbedding.slice().reverse();
       setSearchResults(reversedResults);
-
-      // Calculate total pages if you have that information
+      setActivePage(page);
       setTotalPages(5);
     } catch (err) {
       console.error("Error fetching embedding:", err);
@@ -71,6 +70,8 @@ const EmbeddingSearch = () => {
       // Reversing the order of search results
       const reversedResults = results.data.Get.FileEmbedding.slice().reverse();
       setSearchResults(reversedResults);
+      setActivePage(1);
+      setTotalPages(5);
     } catch (err) {
       console.error("Error handleFindSimilar:", err);
       setError(err instanceof Error ? err.message : String(err));
