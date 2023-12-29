@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Card, Image, Button, Text, Anchor } from "@mantine/core";
+import { Card, Image, Button, Text, Anchor, Group } from "@mantine/core";
 
 interface ImageCardProps {
   id: string;
@@ -32,10 +32,6 @@ const ImageCard: React.FC<ImageCardProps> = ({
 
   return (
     <Card>
-      <Anchor href={`${flaskEndpoint}${fileName}`}>
-        File Name: {fileName}
-      </Anchor>
-      <Text>Distance: {distance?.toFixed(4)}</Text>
       <Image
         src={imageUrl}
         alt={fileName}
@@ -43,17 +39,40 @@ const ImageCard: React.FC<ImageCardProps> = ({
         height={600}
         loading="lazy"
       />
-      <Button variant="subtle" onClick={() => setViewFullSize(!viewFullSize)}>
-        {viewFullSize ? "View Thumbnail" : "View Full Size"}
-      </Button>
-      {onViewAlbum && (
-        <Button variant="subtle" onClick={() => onViewAlbum(extractedDate)}>
-          View Images from {extractedDate}
+
+      <Group style={{ marginTop: "1rem", flexWrap: "wrap" }}>
+        <Anchor href={`${flaskEndpoint}${fileName}`} style={{ flexGrow: 1 }}>
+          {fileName}
+        </Anchor>
+
+        <Text style={{ flexGrow: 1 }}>{distance?.toFixed(3)}</Text>
+
+        <Button
+          variant="subtle"
+          onClick={() => handleFindSimilar(id)}
+          style={{ flexGrow: 1 }}
+        >
+          Similar
         </Button>
-      )}
-      <Button variant="subtle" onClick={() => handleFindSimilar(id)}>
-        Find Similar Images
-      </Button>
+
+        <Button
+          variant="subtle"
+          onClick={() => setViewFullSize(!viewFullSize)}
+          style={{ flexGrow: 1 }}
+        >
+          {viewFullSize ? "Thumbnail" : "Full"}
+        </Button>
+
+        {onViewAlbum && (
+          <Button
+            variant="subtle"
+            onClick={() => onViewAlbum(extractedDate)}
+            style={{ flexGrow: 1 }}
+          >
+            Date {extractedDate}
+          </Button>
+        )}
+      </Group>
     </Card>
   );
 };
