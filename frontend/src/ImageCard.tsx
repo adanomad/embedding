@@ -4,17 +4,17 @@ import { Card, Image, Button, Text, Anchor, Group } from "@mantine/core";
 interface ImageCardProps {
   id: string;
   fileName: string;
-  distance?: number;
   flaskEndpoint: string;
-  onViewAlbum: (date: string) => void;
-  handleFindSimilar: (id: string) => void;
+  distance?: number;
+  onViewAlbum?: (date: string) => void;
+  handleFindSimilar?: (id: string) => void;
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({
   id,
   fileName,
-  distance,
   flaskEndpoint,
+  distance,
   onViewAlbum,
   handleFindSimilar,
 }) => {
@@ -69,13 +69,15 @@ const ImageCard: React.FC<ImageCardProps> = ({
       </Group>
 
       <Group style={{ marginTop: "0.5rem" }}>
-        <Button
-          variant="outline"
-          onClick={() => handleFindSimilar(id)}
-          size="xs"
-        >
-          Find Similar Images
-        </Button>
+        {handleFindSimilar && (
+          <Button
+            variant="outline"
+            onClick={() => handleFindSimilar(id)}
+            size="xs"
+          >
+            Find Similar Images
+          </Button>
+        )}
 
         <Button
           variant="outline"

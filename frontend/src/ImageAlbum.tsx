@@ -49,7 +49,11 @@ const ImageAlbum: React.FC<ImageAlbumProps> = ({
           <Text>
             ({index + 1} of {images.length})
           </Text>
-          <ImageCard flaskEndpoint={flaskEndpoint} fileName={image} />{" "}
+          <ImageCard
+            flaskEndpoint={flaskEndpoint}
+            fileName={image}
+            id={index.toString()}
+          />
         </Card>
       ))}
     </div>
