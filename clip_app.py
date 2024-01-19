@@ -52,10 +52,10 @@ def get_image():
 
     # Extract date from filename and construct the path
     date_folder = filename[:8]  # Assuming date is in 'YYYYMMDD' format
-    image_path = f"{mount}/ss/{date_folder}/{filename}"
+    image_path = f"{mount}/{date_folder}/{filename}"
 
     if not os.path.exists(image_path):
-        return jsonify({"error": "File not found"}), 404
+        return jsonify({"error": f"File not found at {image_path}"}), 404
 
     return send_file(image_path, mimetype="image/jpeg")
 
@@ -69,7 +69,7 @@ def list_files_by_date():
 
     # Extract date from filename and construct the path
     date_folder = filename[:8]  # Assuming date is in 'YYYYMMDD' format
-    directory_path = f"{mount}/ss/{date_folder}/"
+    directory_path = f"{mount}/{date_folder}/"
 
     if not os.path.exists(directory_path):
         return jsonify({"error": "Directory not found"}), 404
@@ -104,7 +104,7 @@ def get_thumbnail():
     image_path = f"{mount}/{date_folder}/{filename}"
 
     if not os.path.exists(image_path):
-        return jsonify({"error": "File not found"}), 404
+        return jsonify({"error": f"File not found {image_path}"}), 404
 
     thumbnail = create_thumbnail(image_path)
     return send_file(io.BytesIO(thumbnail), mimetype="image/jpeg")
