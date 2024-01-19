@@ -24,6 +24,7 @@ print(f"Using {device}")
 device = torch.device(device)
 model, preprocess = clip.load("ViT-L/14", device=device)
 
+mount = os.getenv("MOUNT", "")
 
 @app.route("/embed", methods=["POST"])
 def get_embedding():
@@ -51,7 +52,7 @@ def get_image():
 
     # Extract date from filename and construct the path
     date_folder = filename[:8]  # Assuming date is in 'YYYYMMDD' format
-    image_path = f"/mnt/datahaus-jason/ss/{date_folder}/{filename}"
+    image_path = f"{mount}/ss/{date_folder}/{filename}"
 
     if not os.path.exists(image_path):
         return jsonify({"error": "File not found"}), 404
@@ -68,7 +69,7 @@ def list_files_by_date():
 
     # Extract date from filename and construct the path
     date_folder = filename[:8]  # Assuming date is in 'YYYYMMDD' format
-    directory_path = f"/mnt/datahaus-jason/ss/{date_folder}/"
+    directory_path = f"{mount}/ss/{date_folder}/"
 
     if not os.path.exists(directory_path):
         return jsonify({"error": "Directory not found"}), 404
@@ -100,7 +101,7 @@ def get_thumbnail():
         return jsonify({"error": "No fileName provided"}), 400
 
     date_folder = filename[:8]
-    image_path = f"/mnt/datahaus-jason/ss/{date_folder}/{filename}"
+    image_path = f"{mount}/{date_folder}/{filename}"
 
     if not os.path.exists(image_path):
         return jsonify({"error": "File not found"}), 404
