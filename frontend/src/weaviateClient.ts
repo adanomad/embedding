@@ -1,8 +1,9 @@
 import weaviate from "weaviate-ts-client";
+import backendHost from "./env";
 
 export const client = weaviate.client({
   scheme: "http",
-  host: "glassbox.ds:8080",
+  host: `${backendHost}:8080`,
 });
 
 // export const getEmbeddingVector = async (fileName: string) => {

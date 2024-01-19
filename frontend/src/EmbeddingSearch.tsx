@@ -6,6 +6,7 @@ import { client } from "./weaviateClient";
 import ImageCard from "./ImageCard";
 import ImageAlbum from "./ImageAlbum";
 import { Modal } from "@mantine/core";
+import backendHost from "./env";
 
 interface SearchResult {
   fileName: string;
@@ -81,9 +82,12 @@ const EmbeddingSearch = () => {
   const handleSearch = async () => {
     setLoading(true);
     try {
-      const embedResponse = await axios.post("http://glassbox.ds:5000/embed", {
-        text: inputText,
-      });
+      const embedResponse = await axios.post(
+        `http://${backendHost}:5000/embed`,
+        {
+          text: inputText,
+        }
+      );
       setEmbedding(embedResponse.data.embedding);
       await fetchSearchResults(embedResponse.data.embedding, 1);
     } catch (err) {
@@ -126,7 +130,7 @@ const EmbeddingSearch = () => {
               key={index}
               fileName={item.fileName}
               distance={item._additional.distance}
-              flaskEndpoint="http://glassbox.ds:5000"
+              flaskEndpoint={`http://${backendHost}:5000`}
               onViewAlbum={handleViewAlbum}
               handleFindSimilar={handleFindSimilar}
             />
@@ -140,7 +144,7 @@ const EmbeddingSearch = () => {
           >
             <ImageAlbum
               searchDate={selectedDate}
-              flaskEndpoint="http://glassbox.ds:5000/"
+              flaskEndpoint={`http://${backendHost}:5000`}
             />
           </Modal>
 
