@@ -7,3 +7,6 @@ data/
 *.html
 *.sqlite
 *.tflite
+models/pose_landmarker_heavy.task
+models/pose_landmarker_full.task
+.ipynb_checkpoints/pose_classification-checkpoint.ipynb
