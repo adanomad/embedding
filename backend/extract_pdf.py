@@ -9,6 +9,8 @@ import argparse
 
 
 def extract_images_and_text(pdf_path, output_folder):
+    file_name = os.path.basename(pdf_path)
+
     # Create the output folder if it doesn't exist
     if not os.path.exists(output_folder):
         pdf_path_base_path = os.path.dirname(pdf_path)
@@ -16,16 +18,19 @@ def extract_images_and_text(pdf_path, output_folder):
         os.makedirs(output_folder)
 
     # Open the PDF file
-    all_text_file = open(f"{output_folder}/all.txt", "w")
+    all_text_file = open(f"{output_folder}/{file_name}.txt", "w")
     with fitz.open(pdf_path) as doc:
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
 
             # Extract text and save to a file
             text = page.get_text()
+            all_text_file.write(f"<PAGE {page_num + 1}/>\n")
+            all_text_file.write(text)
+
             with open(f"{output_folder}/{page_num + 1}.txt", "w") as text_file:
+                text_file.write(f"<PAGE {page_num + 1}/>\n")
                 text_file.write(text)
-                all_text_file.write(text)
 
             # Extract images
             image_list = page.get_images(full=True)
