@@ -1,0 +1,472 @@
+<PAGE 1/>
+University of Waterloo
+Co-operative Work Terms
+Lu Cao
+20310032
+M Electrical and Computer Engineering, MEng, Co-op
+No Co-op Work Term History available
+Planned Future Work Term(s)
+May - Aug 2024
+Disclaimer: This evaluation does not constitute an employment endorsement or recommendation.  Employer evaluations
+of student contributions and achievements during the work term are conducted as part of the University of Waterloo’s Co-
+operative (Co-op) Education model.  Like academic grades, overall evaluations are part of the assessment of a student’s
+progress in the co-op portion of their degree studies.  These assessments are completed using criteria set out by the
+University, not the employer, and do not reflect the employer’s criteria or assessment metrics.
+<PAGE 2/>
+Dear Hiring Manager, 
+ 
+I am writing to express my interest in the coop position at your esteemed organization. I'm eager 
+to bring my skills and passion to contribute to meaningful projects during the Winter Term 2024. 
+ 
+In my eight-year tenure as a Machine Learning expert in the insurance industry, I have led 
+transformative projects that significantly impacted the sector. Notably, during my tenure as a 
+Consulting Actuary at Eckler Ltd, I led the creation and dissemination of industry machine 
+learning models for vehicle rate groups. These models, adopted nationwide, not only showcased 
+my predictive modelling skills but also demonstrated my ability to work on projects with 
+substantial impact. My passion for innovation and continuous learning has led me to pursue a 
+Master’s program in Software Engineering, furthering my technical acumen and adaptability to 
+the ever-evolving tech landscape. 
+ 
+With proficiency in Python, JavaScript, R, and other critical technologies, I possess the technical 
+skill sets necessary for the position. My ongoing projects, such as the development of a web 
+platform using Python and LLMs for automated document generation, showcase my practical 
+experience in software development. I am excited about the opportunity to contribute to your 
+team and leverage my experience in leading teams, strong analytical skills, and cross-functional 
+collaboration expertise to drive impactful results. 
+ 
+Thank you for considering my application. I look forward to the possibility of discussing my 
+experiences and skills in greater detail and how they align with your needs. 
+ 
+Sincerely, 
+Lu Cao 
+Cao.lu.27@gmail.com 
+<PAGE 3/>
+ 
+ 
+LU CAO 
+647-557-2626 || cao.lu.27@gmail.com || https://www.linkedin.com/in/lu-cao-1053875a 
+ 
+SUMMARY OF QUALIFICATIONS 
+● 
+8 years of Machine Learning and programming experience, specializing in predictive modeling and statistics 
+● 
+Proficient in Python, Javascript/Typescript, HTML, CSS, SQL, R 
+● 
+Demonstrated exceptional analytical acumen and a strong aptitude for rapid learning, exhibited by the achievement of FCAS 
+and FCIA actuarial designations (with the finish of 10 actuarial exams) 
+● 
+4 years of leadership experience highlighting strong cross-functional and project management skills 
+● 
+Ability to collaborate and thrive in a cross-cultural work environment 
+RELEVANT PROJECTS 
+Project 1 – Proxima – Culture Analysis Platforms                                                                                                 2023 Dec - Present 
+● 
+Independently driving the development and deployment of Proxima's website, a specialized start-up focused on culture 
+analysis, utilizing Next.js for dynamic web development alongside Natural Language Processing (NLP) algorithms for 
+comprehensive sentiment analysis  
+● 
+This platform is designed to pave the way for mid-sized enterprises seeking access to superior analytics and culture 
+management consulting services, with a dedicated aim to eliminate cultural fuzziness and drive organizational performance 
+● 
+Project Tech Stacks: Next.js, MySQL, Hugging Face's Transformers, PyTorch, TensorFlow/Keras, Python 
+ 
+Project 2 - LLM Embedded Web-Based Application  
+ 
+ 
+ 
+ 
+ 
+            2023 Sep - Present 
+● 
+Developing a web platform aimed at expediting graduate program applications, emphasizing the automated generation of 
+essential documents (including personal statements and cover letters) leveraging advanced Large Language Models (LLMs) 
+● 
+Project Tech Stacks: Python, Flask, React.js, Typescript, MySQL, ChatGPT API 
+WORK EXPERIENCE  
+Eckler Ltd, Toronto, ON    
+ 
+      
+ 
+ 
+                                                                       2019 – 2021 (2 years) 
+  Consulting Actuary, Property & Casualty  
+● Led the creation and dissemination of annual industry machine learning models for vehicle rate groups on behalf of a government 
+entity, serving as the foundation for vehicle risk classification models adopted by all insurance companies nationwide. 
+● Designated by a federal government regulatory authority as a subject matter expert in machine learning models, entrusted with 
+the responsibility of assessing machine learning model submissions from multiple insurance companies within the industry. 
+ 
+Economical Insurance, Toronto, ON 
+     
+               
+ 
+ 
+ 
+                     2016 – 2019 (2.5 years) 
+  Team Lead, Product, Pricing & Analytics   
+● Oversaw the creation of a diverse range of insurance products, directing a team of more than 10 analysts in the development of 
+pricing algorithms, machine learning models, and rating platforms. 
+● Managed interdepartmental communication to facilitate cross-functional and multicultural collaboration, resulting in the 
+successful attainment of project objectives. 
+ 
+RSA Insurance Group, Toronto, ON 
+     
+                                                                                            2013 - 2016 (3.5 years) 
+  Senior Actuarial Analyst, Analytics, Research & Development 
+● Constructed a multitude of machine learning models by leveraging extensive insurance datasets and a range of modeling softwares 
+to address the organization’s rate adequacy requirements. 
+● Designed and implemented numerous software programs for comprehensive data manipulation, transforming raw data from 
+source to formats ready for modeling. 
+EDUCATION 
+ 
+Master of Engineering - Electrical and Computer Engineering - University of Waterloo                2023 May - 2024 Dec (Anticipated) 
+Bachelor of Mathematics - Actuarial Science, Statistic Minor - University of Waterloo                                                       2008 - 2013         
+<PAGE 4/>
+UNIVERSITY OF WATERLOO
+UNOFFICIAL GRADE REPORT
+Lu Cao
+20310032
+M Electrical and Computer Engineering, MEng, Co-op
+Winter 2024
+GS
+    -
+Continuing Graduate Studies
+ECE
+ 657A
+Data & Knwldg Mdelling & Anlys
+MSCI
+ 718
+Statistics for Data Analytics
+Term Average:
+Decision:
+N/A
+Fall 2023
+GS
+    -
+Continuing Graduate Studies
+ECE
+ 606
+Algorithm Design and Analysis
+75
+ECE
+ 730
+Topics in Solid State Devices
+Quantum Machine Learning
+90
+Term Average:
+Decision:
+82.5
+Spring 2023
+ECE
+ 602
+Introduction to Optimization
+97
+ECE
+ 608
+Quantitative Methods in BME
+93
+ACINTY
+ 620
+Academic Integrity Module
+CR
+GS
+    -
+Continuing Graduate Studies
+Term Average:
+Decision:
+95
+Fall 2012
+ACTSC
+ 463
+Prop and Casualty Loss Reserv
+86
+PHYS
+ 111
+Physics 1
+91
+ECON
+ 202
+Macroeconomic Theory 1
+78
+ACTSC
+ 432
+Loss Models 2
+92
+ECON
+ 231
+Intro to International Econ
+90
+ECON
+ 421
+Econometrics
+97
+Term Average:
+Decision:
+89
+Excellent standing
+Spring 2012
+COOP
+   5
+Co-operative Work Term
+CR
+PD
+   7
+Conflict Resolution
+CR
+Term Average:
+Decision:
+N/A
+Winter 2012
+ECON
+ 301
+Microeconomic Theory 2
+96
+HRM
+ 200
+Basic Human Resources Mgmt
+84
+STAT
+ 340
+Computer Simul of Complex Sys
+93
+ACTSC
+ 433
+Analysis of Survival Data
+94
+AFM
+ 102
+Intro to Managerial Acct
+94
+Term Average:
+Decision:
+92.2
+Excellent standing
+Fall 2011
+STAT
+ 443
+Forecasting
+90
+ACTSC
+ 445
+Asset-Liability Management
+94
+ACTSC
+ 446
+Mathematical Models in Finance
+91
+AFM
+ 101
+Intro to Financial Accounting
+88
+ACTSC
+ 431
+Loss Models 1
+80
+Term Average:
+Decision:
+88.6
+Excellent standing
+Spring 2011
+COOP
+   4
+Co-operative Work Term
+CR
+PD
+   7
+Conflict Resolution
+NCR
+Term Average:
+Decision:
+N/A
+Winter 2011
+Page 1 of 2
+<PAGE 5/>
+STAT
+ 333
+Applied Probability
+76
+ACTSC
+ 331
+Life Contingencies 1
+85
+PSYCH
+ 101
+Introductory Psychology
+WD
+ACTSC
+ 372
+Corporate Finance 2
+76
+STAT
+ 331
+Applied Linear Models
+75
+Term Average:
+Decision:
+78
+Excellent standing
+Fall 2010
+COOP
+   3
+Co-operative Work Term
+CR
+PD
+   4
+Teamwork
+CR
+Term Average:
+Decision:
+N/A
+Spring 2010
+STAT
+ 330
+Mathematical Statistics
+91
+ECON
+ 201
+Microeconomic Theory 1
+95
+ACTSC
+ 371
+Corporate Finance 1
+88
+AMATH
+ 250
+Intro Differential Equations
+78
+ACTSC
+ 232
+Intro to Actuarial Mathematics
+85
+Term Average:
+Decision:
+87.4
+Excellent standing
+Winter 2010
+COOP
+   2
+Co-operative Work Term
+CR
+PD
+   3
+Communication
+CR
+Term Average:
+Decision:
+N/A
+Fall 2009
+ENGL
+ 119
+Communications in Math & CS
+79
+MATH
+ 235
+Linear Algebra 2 (Hon Math)
+86
+STAT
+ 231
+Statistics
+83
+ACTSC
+ 231
+Mathematics of Finance
+89
+MATH
+ 237
+Calculus 3 for Honours Math
+89
+Term Average:
+Decision:
+85.2
+Good standing
+Spring 2009
+PD
+   2
+Critical Reflec'n & Rprt Wrtng
+CR
+COOP
+   1
+Co-operative Work Term
+CR
+Term Average:
+Decision:
+N/A
+Winter 2009
+CS
+ 116
+Intro to Computer Science 2
+64
+ECON
+ 101
+Intro to Microeconomics
+72
+MATH
+ 138
+Calculus 2 For Honours Math
+80
+PD
+   1
+Co-op Fundamentals
+CR
+STAT
+ 230
+Probability
+84
+MATH
+ 136
+Linear Algebra 1 (Hon Math)
+71
+Term Average:
+Decision:
+74.2
+Good standing
+Fall 2008
+MATH
+ 137
+Calculus 1 for Honours Math
+87
+BUS
+ 111W
+Intro to Bus Organization(WLU)
+C-
+MATH
+ 135
+Algebra for Hons Mathematics
+94
+ECON
+ 102
+Intro to Macroeconomics
+72
+CS
+ 115
+Intro to Computer Science 1
+80
+Term Average:
+Decision:
+79
+Good standing
+Page 2 of 2
+<PAGE 6/>
+Lu Cao
+20310032
+M Electrical and Computer Engineering, MEng, Co-op
+ 
+This job is funded by the Government of
+Canada as advertised in the job posting. To be
+eligible you must be a Canadian citizen,
+permanent resident or a protected person
+defined by the Immigration and Refugee
+Protection Act. Do you meet this requirement?
+Yes
+What programming languages are you
+proficient in? (Select all that apply)
+TypeScript
+Python
+Which web development frameworks have you
+worked with? (Select all that apply)
+React
+Next.js
+Have you previously worked on projects
+involving AI or machine learning concepts?
+(Select one or more)
+Yes, I have hands-on experience and have built
+projects.

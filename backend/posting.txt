@@ -1,0 +1,68 @@
+Job Posting Information
+Work Term:	2024 - Spring
+Job Type:	Co-op Main
+Job Title:	Full Stack AI Software Engineering
+Number of Job Openings:	2
+Job Category (NOC):	2173 Software Engineers and Designers
+Level:	
+Senior
+Region:	ON - Hamilton, Niagara, Brant, Haldimand Region
+Job - City:	Hamilton
+Job - Province / State:	Ontario
+Job - Postal Code / Zip Code (X#X #X#):	L9K 0H1
+Job - Country:	Canada
+Employment Location Arrangement:	Remote
+Additional Information Re: Employment Location Arrangement:	Remote but those with Hybrid (In-person and Remote) are preferred.
+Work Term Duration:	4 month work term
+Special Considerations Re: Work Term Start/End Dates:	Spring 2024 - May 6 to August 23
+Job Summary:	Adanomad Tech Consulting provides cutting-edge AI software solutions. It is founded in 2021 by Jason Sun, an experienced software engineer in the tech industry with work experience at Apple, Amazon, and AutoX - a self driving startup.
+
+You will have the opportunity to deep-dive into cutting-edge AI technologies and full-stack web frameworks within a startup ecosystem. Your role will revolve around providing support for ventures in the AI field.
+Internal Bootstrapped Projects
+AskRemotely: A SaaS tool designed to enhance document searchability and accessibility for files stored on Google Drive, Dropbox, and local directories. This involves using NLP techniques such as text embeddings, vector databases, deploying machine learning models, finetuning, and prompt engineering.
+BJJ Ace: Aimed at BJJ athletes to enhance their training through computer vision motion tracking, video analysis, and using NLP methods in assisting the skill improvements. This involves web development, motion capturing systems, machine learning models and finetuning process.
+
+If you are passionate about the advancements in AI and software development, we encourage you to apply. This internship offers a unique opportunity to gain hands-on experience in a startup environment.
+Job Responsibilities:	
+Participate in the entire software development lifecycle, from concept to production.
+Contribute to the development of web applications.
+Contribute to the UI/UX improvements, graphical design skills would be a plus.
+Good social and communication skills and flexibility to wear "all the hats" at a startup, enthusiastic for working multiple roles.
+Required Skills:	Essential Skills
+Strong Programming Skills: Proficiency in languages such as Python and TypeScript, demonstrating the ability to write clean, efficient, and maintainable code.
+Web Development Expertise: Familiarity with web development frameworks and technologies, with a preference for experience in JavaScript/TypeScript and Next.js, as well as TypeScript and React.
+Analytical Problem-Solving: Excellent problem-solving and analytical abilities, enabling you to tackle complex challenges and find innovative solutions. Being able to figure out problems on your own.
+Remote Work Adaptability: Having the habit to write and document things, and having async communication skills. Proven ability to work both independently and as part of a remote team, ensuring productive collaboration from any location.
+
+Desirable Skills
+AI and ML Experience: Helps to get you quickly on-boarded.
+API Proficiency: Familiarity with RESTful APIs and experience in managing asynchronous operations, improving the integration of our software with external services.
+Cloud Services: Experience with cloud services, especially Vercel and Supabase, to optimize scalability and performance.
+Database Experience: Basic knowledge of databases, including SQL and NoSQL databases, contributing to efficient data management.
+Attention to Detail: Exceptional attention to detail, ensuring the accuracy and quality of your work.
+
+Bonus
+Interest in Martial Arts or Sports Technology: A passion for martial arts or sports technology is a valuable plus, as it aligns with one of the project's focus and can enhance your engagement with our team.
+Transportation and Housing:	Remote work arrangement; no transportation required.
+Compensation and Benefits Information:	$18-22 per hour. Mentorship from Silicon Valley engineers and professional development opportunities. Remote work flexibility. Work with the cutting edge latest and greatest in AI & web development tech stacks.
+Targeted Degrees and Disciplines:	
+Targeted Clusters
+- Theme - Computing: Software
+- Theme - Data Analytics, Statistical Analysis and Mathematical Optimization
+- Theme - Sport and Fitness
+ENG - Software Engineering
+MATH - Computer Science
+SCI - Business
+SCI - Physics
+Application Information
+Application Deadline:	January 16, 2024 09:00 AM
+Application Documents Required:	University of Waterloo Co-op Work History,Cover Letter,Résumé,Grade Report
+Additional Application Information:	Application Documents Required
+Resume
+LinkedIn profile
+Cover Letter (of relevant experiences)
+Grade Report
+Application Method:	WaterlooWorks
+Company Information
+Organization:	Adanomad Tech Consulting
+Division:	14822579 Canada Inc

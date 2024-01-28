@@ -124,15 +124,17 @@ def process_file_and_prompt_single_send(
     prompt = prepare_job_prompt(prompt, resume, job_description)
 
     response = send_to_chatgpt(prompt)
-    return pd.DataFrame([response])
+    with open(f"{resume_txt_file_path}.json", "w") as f:
+        json.dump(response, f)
+    return response
 
 
 # Main function to process files in a directory and generate a single CSV output
 def process_directory_and_prompt(
     directory_path: str, prompt_file: str, job_description_file: str
-) -> pd.DataFrame:
+):
     all_responses = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = []
         for filename in os.listdir(directory_path):
             if filename.endswith(".txt"):
@@ -147,16 +149,18 @@ def process_directory_and_prompt(
                 futures.append(future)
         for future in concurrent.futures.as_completed(futures):
             response = future.result()
-            all_responses.extend(response)
+            all_responses.append(response)
     # for filename in os.listdir(directory_path):
+    #     if len(all_responses) > 3:
+    #         break
     #     if filename.endswith(".txt"):
     #         txt_file_path = os.path.join(directory_path, filename)
     #         print(f"Processing {txt_file_path}")
     #         responses = process_file_and_prompt_single_send(
     #             txt_file_path, prompt_file, job_description_file
     #         )
-    #         all_responses.extend(responses)
-    return pd.DataFrame(all_responses)
+    #         all_responses.append(responses)
+    return all_responses
 
 
 # Command-line argument parsing
@@ -173,12 +177,14 @@ if __name__ == "__main__":
     #     df = pd.read_csv(args.csv)
 
     if args.txtfile:
-        df = process_file_and_prompt_single_send(
+        resp = process_file_and_prompt_single_send(
             args.txtfile, args.prompt, args.job_description
         )
     elif args.dir:
-        df = process_directory_and_prompt(args.dir, args.prompt, args.job_description)
+        responses = process_directory_and_prompt(
+            args.dir, args.prompt, args.job_description
+        )
     else:
         raise ValueError("Must specify either --txtfile or --dir")
 
-    df.to_csv(args.csv, index=False)
+    # df.to_csv(args.csv, index=False)
