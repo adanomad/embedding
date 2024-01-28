@@ -28,9 +28,9 @@ def extract_images_and_text(pdf_path, output_folder):
             all_text_file.write(f"<PAGE {page_num + 1}/>\n")
             all_text_file.write(text)
 
-            with open(f"{output_folder}/{page_num + 1}.txt", "w") as text_file:
-                text_file.write(f"<PAGE {page_num + 1}/>\n")
-                text_file.write(text)
+            # with open(f"{output_folder}/{page_num + 1}.txt", "w") as text_file:
+            #     text_file.write(f"<PAGE {page_num + 1}/>\n")
+            #     text_file.write(text)
 
             # Extract images
             image_list = page.get_images(full=True)
@@ -45,15 +45,37 @@ def extract_images_and_text(pdf_path, output_folder):
     all_text_file.close()
 
 
+def extract_from_folder(folder_path, output_folder):
+    # Create the output folder if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Create an images subfolder
+    images_folder = os.path.join(output_folder, "images")
+    if not os.path.exists(images_folder):
+        os.makedirs(images_folder)
+
+    for file in os.listdir(folder_path):
+        if file.endswith(".pdf"):
+            pdf_path = os.path.join(folder_path, file)
+            extract_images_and_text(pdf_path, output_folder)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract images and text from a PDF.")
-    parser.add_argument("--pdf", type=str, required=True, help="Path to the PDF file")
+    parser.add_argument(
+        "--folder", type=str, help="Path to the folder containing PDF files"
+    )
+    parser.add_argument("--pdf", type=str, help="Path to the PDF file")
     parser.add_argument(
         "--outfolder", type=str, default="outfolder", help="Path to the output folder"
     )
     args = parser.parse_args()
 
-    extract_images_and_text(args.pdf, args.outfolder)
+    if args.folder:
+        extract_from_folder(args.folder, args.outfolder)
+    elif args.pdf:
+        extract_images_and_text(args.pdf, args.outfolder)
 
 
 if __name__ == "__main__":
