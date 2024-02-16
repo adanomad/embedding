@@ -6,5 +6,7 @@
   },
   "search.exclude": {
     "**/.venv": true
-  }
+  },
+  "python.languageServer": "Pylance",
+  "python.analysis.typeCheckingMode": "basic" // or strict
 }
