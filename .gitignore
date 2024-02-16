@@ -12,3 +12,4 @@ models/pose_landmarker_full.task
 .ipynb_checkpoints/pose_classification-checkpoint.ipynb
 outfolder/
 backend/Resumes/
+weaviatedb/
