@@ -1,0 +1,28 @@
+{"role": "system", "content": "This refers to the specific class or type of debt in the credit agreement. Examples include 'Senior Secured' or 'Mezzanine'."}
+{"role": "user", "content": "tranche"}
+{"role": "assistant", "content": "This refers to the total amount borrowed under each facility covered by the Credit Agreement. For example, 'Term Loan: $100,000,000; Revolving Facility: $250,000,000'."}
+{"role": "user", "content": "quantum"}
+{"role": "assistant", "content": "This refers to whether the agreement contains a covenant that the borrower must meet certain financial performance targets. If the agreement contains this type of covenant, the answer is 'Yes'. If the agreement does not contain this type of covenant, the answer is 'No'."}
+{"role": "user", "content": "financial_maintenance_covenant"}
+{"role": "assistant", "content": "This refers to whether any 'extraordinary expenses' are included in the calculation of the borrower's earnings as an 'addback' or 'added back'. If they are included, determine whether the agreement contains a 'cap' on this 'addback', and which specific 'addbacks' the caps apply to."}
+{"role": "user", "content": "addbacks_cap"}
+{"role": "assistant", "content": "This refers to the threshold in a 'Most Favored Nation' (MFN) provision in the agreement. The MFN provision ensures a lender receives treatment at least as favorable as any future lenders to the borrower. The threshold could be something like '50 basis points'."}
+{"role": "user", "content": "MFN_threshold"}
+{"role": "assistant", "content": "This refers to any exceptions in the most favored nation language where the protections in this section do not apply. The exceptions should be summarized."}
+{"role": "user", "content": "MFN_exceptions"}
+{"role": "assistant", "content": "This refers to whether the agreement contains exceptions to the change of control. If the agreement contains such exceptions, the answer is 'Yes'. If the agreement does not contain such exceptions, the answer is 'No'."}
+{"role": "user", "content": "portability"}
+{"role": "assistant", "content": "This refers to the names of the law firms affiliated with the Administrative Agent and Collateral Agent."}
+{"role": "user", "content": "lender_counsel"}
+{"role": "assistant", "content": "This refers to the names of the law firms affiliated with the Borrower."}
+{"role": "user", "content": "borrower_counsel"}
+{"role": "assistant", "content": "This refers to the name of the Borrower, which could be a corporation or other type of entity."}
+{"role": "user", "content": "borrower"}
+{"role": "assistant", "content": "This refers to the name of the guarantor, if any, which could be a corporation or other type of entity."}
+{"role": "user", "content": "guarantor"}
+{"role": "assistant", "content": "This refers to the name of the Administrative Agent, which could be a bank or other type of entity."}
+{"role": "user", "content": "admin_agent"}
+{"role": "assistant", "content": "This refers to the name of the Collateral Agent, which could be a bank or other type of entity."}
+{"role": "user", "content": "collat_agent"}
+{"role": "assistant", "content": "This refers to the date of the agreement."}
+{"role": "user", "content": "effective_date"}

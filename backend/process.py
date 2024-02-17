@@ -50,12 +50,14 @@ def prepare_prompt(page_text: str, prompt_path: str) -> str:
 def send_to_chatgpt(prompt: str):
     t0 = time.time()
     try:
-        response: openai.ChatCompletion = openai.chat.completions.create(
+        response = openai.chat.completions.create(
             model="gpt-4-1106-preview",
             messages=[{"content": prompt, "role": "user"}],
             response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content
+        if content is None:
+            raise openai.OpenAIError("No content in response")
         j = json.loads(content)
         print(f"Processed in {time.time() - t0} seconds")
         return j
@@ -82,8 +84,9 @@ def process_file_and_prompt_multi_pages(
     # for page in pages[:PAGE_LIMIT]:
     #     if page == "":
     #         continue
-    #     response = send_to_chatgpt(page, prompt_file)
-    #     handle_response(response)
+    #     input = prepare_prompt(page, prompt_file)
+    #     response = send_to_chatgpt(input)
+    #     responses.append(response)
 
     t1 = time.time()
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -91,8 +94,9 @@ def process_file_and_prompt_multi_pages(
         for page in pages:
             if page == "":
                 continue
-            future = executor.submit(send_to_chatgpt, page, prompt_file)
-            futures.append(future)
+        input = prepare_prompt(page, prompt_file)
+        future = executor.submit(send_to_chatgpt, input)
+        futures.append(future)
         for future in concurrent.futures.as_completed(futures):
             response = future.result()
             print(response)
@@ -126,7 +130,7 @@ def process_file_and_prompt_single_send(
     response = send_to_chatgpt(prompt)
     with open(f"{resume_txt_file_path}.json", "w") as f:
         json.dump(response, f)
-    return response
+    return pd.DataFrame(response)
 
 
 # Main function to process files in a directory and generate a single CSV output

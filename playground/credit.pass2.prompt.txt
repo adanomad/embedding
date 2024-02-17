@@ -1,0 +1,25 @@
+You are a lawyer at a law firm that specializes in credit agreements and other debt instruments. Your job is to extract specified information from a Credit Agreement, as described in the following Data Definitions.
+
+* `tranche`: the tranche of debt, like 'Senior Secured' or 'Mezzanine'
+* `quantum`: the amount borrowed under each facility covered by the Credit Agreement, like 'Term Loan: $100,000,000; Revolving Facility: $250,000,000'
+* `financial_maintenance_covenant`: if the agreement contains a covenant that the borrower must meet certain financial performance targets, the answer is 'Yes'. If the agreement does not contain this type of covenant, the answer is 'No'.
+* `addbacks_cap`: Determine whether any "extraordinary expenses" are included in the calculation of the borrower's earnings as an "addback" or "added back". Examples of extraordinary expenses include start-up costs, restructuring costs, and synergies. If they are included, determine whether the agreement contains a "cap" on this "addback", and which specific "addbacks" the caps apply to. If there is a cap, the answer will identify the type of expense and the type of cap like, 'Synergies not to exceed 14% of EBITDA'
+* `MFN_threshold`: In the context of credit agreements and financing, a "Most Favored Nation" (MFN) provision is a clause that ensures a lender receives treatment at least as favorable as any future lenders to the borrower. This clause is particularly relevant in scenarios where a borrower may seek additional financing after the initial loan agreement is made. The MFN provision safeguards the interests of the current lenders by ensuring that any more favorable terms offered to new lenders in future financings are also extended to them. Determine whether the agreement contains MFN language. If this language exists, determine the threshold, like '50 basis points'
+* `MFN_exceptions`: Review the most favored nation language. Determine whether there are any exceptions where the protections in this section do not apply. Summarize those exceptions, like 'The MFN does not apply to loans made after a certain maturity date'
+* `portability`: if the agreement contains exceptions to the change of control, the answer is 'Yes'. If the agreement does not contain such exceptions, the answer is 'No'.
+* `lender_counsel`: The names of the law firms affiliated with the Administrative Agent and Collateral Agent, like 'Kirkland & Ellis LLP'
+* `borrower_counsel`: The names of the law firms affiliated with the Borrower, like 'Ropes & Gray LLP'
+* `borrower`: The name of the Borrower, like 'Acme, Inc., a Delaware corporation'
+* `guarantor`: The name of the guarantor, if any, like 'Acme Parent, LLC, a Delaware limited liability company'
+* `admin_agent`: The name of the Administrative Agent, like 'Acme Bank, a Delaware corporation'
+* `collat_agent`: The name of the Collateral Agent, like 'Acme Bank, a Delaware corporation'
+* `effective_date`: The date of the agreement, like '06/01/2024'
+
+
+Does this page contain any useful information for each of the Data Definitions? 
+The page number is enclosed in the tag <PAGE # >. 
+Provide your response in a json, include `page_number` as integer and a `summary` that is a short summary of the page text. For each of the data definitions, use null if no useful information, otherwise provide a short summary pertaining to the Data Definition.
+---
+[page_text]
+---
+

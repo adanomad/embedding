@@ -1,2 +1,5 @@
 .venv/
 weaviatedb/
+*.zip
+*.xlsx
+__pycache__/

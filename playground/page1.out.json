@@ -1,0 +1,18 @@
+{
+    "page_number": 1,
+    "summary": "This is the cover page of the agreement, identifying the principal parties, the administrative and collateral agent, and the date of the agreement. The document is a credit agreement dated June 29, 2022 and the parties are Dave & Buster's Holdings, Inc., as the Borrower and Deutsche Bank AG New York Branch, as the Administrative Agent and Collateral Agent. A table of contents is also provided for the agreement.",
+    "tranche": null,
+    "quantum": null,
+    "financial_maintenance_covenant": null,
+    "addbacks_cap": null,
+    "MFN_threshold": null,
+    "MFN_exceptions": null,
+    "portability": null,
+    "lender_counsel": null,
+    "borrower_counsel": null,
+    "borrower": "The borrower is identified as Dave & Buster's, Inc.",
+    "guarantor": "The guarantor is identified as Dave & Buster's Holdings, Inc.",
+    "admin_agent": "The Administrative Agent and Collateral Agent is identified as Deutsche Bank AG New York Branch.",
+    "collat_agent": "The Collateral Agent is identified as Deutsche Bank AG New York Branch.",
+    "effective_date": "The effective date of the agreement is June 29, 2022."
+  }
