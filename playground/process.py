@@ -11,73 +11,15 @@ import csv
 import pandas as pd
 from typing import Optional
 from pydantic import BaseModel
-import weaviate
 from typing import List, Dict
 
+MODEL_NAME = "gpt-3.5-turbo"  # "gpt-4-1106-preview" #
 
-class ChatGPTResponse(BaseModel):
-    original_page_text: str
-    page_number: int
-    summary: str
-    tranche: Optional[str] = None
-    quantum: Optional[str] = None
-    financial_maintenance_covenant: Optional[str] = None
-    addbacks_cap: Optional[str] = None
-    MFN_threshold: Optional[str] = None
-    MFN_exceptions: Optional[str] = None
-    portability: Optional[str] = None
-    lender_counsel: Optional[str] = None
-    borrower_counsel: Optional[str] = None
-    borrower: Optional[str] = None
-    guarantor: Optional[str] = None
-    admin_agent: Optional[str] = None
-    collat_agent: Optional[str] = None
-    effective_date: Optional[str] = None
-
-
-def get_weaviate_client() -> weaviate.Client:
-    weaviate_credentials = json.loads(os.getenv("WEAVIATE_CREDENTIALS", "{}"))
-    weaviate_url = weaviate_credentials.get("URL", "localhost:7000")
-    weaviate_api_key = weaviate_credentials.get("API_KEY", "")
-    weaviate_http_scheme = weaviate_credentials.get("HTTP_SCHEME", "http")
-
-    auth_credentials = weaviate.AuthApiKey(api_key=weaviate_api_key)
-
-    return weaviate.Client(
-        url=f"{weaviate_http_scheme}://{weaviate_url}",
-        auth_client_secret=auth_credentials,
-    )
-    # weaviate_client = weaviate.Client(
-    #     embedded_options=weaviate.embedded.EmbeddedOptions(
-    #         persistence_data_path="./weaviatedb",
-    #     )
-    # )
-    # return weaviate_client
-
-
-# Load the OPENAI_API_KEY key from an environment file
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("No OpenAI API key found in environment variables")
 openai_client = OpenAI(api_key=api_key)
-
-
-weaviate_client = get_weaviate_client()
-
-
-# Load environment variables
-load_dotenv()
-# This Python script is designed to read a text file and a prompt file, process the text file by splitting it by page numbers, and then send each page along with the prompt to a ChatGPT API. The script handles these operations in parallel, using up to 8 workers for efficiency.
-
-
-# Function to get text embedding
-def get_text_embedding(text: str) -> List[float]:
-    return (
-        openai.embeddings.create(input=[text], model="text-embedding-ada-002")
-        .data[0]
-        .embedding
-    )
 
 
 # Function to read and split the text file by page
@@ -104,12 +46,14 @@ def prepare_prompt(page_text: str, prompt_path: str) -> str:
     # raise error if the prompt does not contain the placeholder
     if TO_REPLACE not in prompt:
         raise ValueError(f"Prompt file {prompt_path} does not contain {TO_REPLACE}")
-    return prompt.replace(TO_REPLACE, page_text)
+    gpt_input = prompt.replace(TO_REPLACE, page_text)
+
+    return gpt_input
 
 
-def send_to_chatgpt(input: str) -> ChatGPTResponse:
+def send_to_chatgpt(input: str) -> dict:
     response = openai.chat.completions.create(
-        model="gpt-4-1106-preview",
+        model=MODEL_NAME,
         messages=[{"content": input, "role": "user"}],
         response_format={"type": "json_object"},
     )
@@ -118,96 +62,83 @@ def send_to_chatgpt(input: str) -> ChatGPTResponse:
         print(f"No content error processing page: {input}")
         raise Exception("No content error processing page")
     j = json.loads(content)
-    return ChatGPTResponse(**j, original_page_text=input)
+    return j
 
 
-def handle_response(chatgpt_response: ChatGPTResponse):
-    store_response_weaviate(chatgpt_response)
-    print(chatgpt_response)
-
-
-# Function to store the response in Weaviate
-def store_response_weaviate(chatgpt_response: ChatGPTResponse):
-    embedding = get_text_embedding(chatgpt_response.original_page_text)
-    data_object = {
-        "embedding": embedding,
-        "original_page_text": chatgpt_response.original_page_text,
-        "page_number": chatgpt_response.page_number,
-        "summary": chatgpt_response.summary,
-        "tranche": chatgpt_response.tranche,
-        "quantum": chatgpt_response.quantum,
-        "financial_maintenance_covenant": chatgpt_response.financial_maintenance_covenant,
-        "addbacks_cap": chatgpt_response.addbacks_cap,
-        "MFN_threshold": chatgpt_response.MFN_threshold,
-        "MFN_exceptions": chatgpt_response.MFN_exceptions,
-        "portability": chatgpt_response.portability,
-        "lender_counsel": chatgpt_response.lender_counsel,
-        "borrower_counsel": chatgpt_response.borrower_counsel,
-        "borrower": chatgpt_response.borrower,
-        "guarantor": chatgpt_response.guarantor,
-        "admin_agent": chatgpt_response.admin_agent,
-        "collat_agent": chatgpt_response.collat_agent,
-        "effective_date": chatgpt_response.effective_date,
-    }
-    try:
-        weaviate_client.data_object.create(data_object, "ChatGPTResponse")
-        print("Stored in Weaviate:", chatgpt_response)
-    except Exception as e:
-        print("Error storing in Weaviate:", e)
-
-
-def create_weaviate_schema():
-    class_schema = {
-        "class": "ChatGPTResponse",
-        "description": "Response data from ChatGPT",
-        "properties": [
-            {"name": "original_page_text", "dataType": ["text"]},
-            {"name": "page_number", "dataType": ["int"]},
-            {"name": "summary", "dataType": ["text"]},
-            {"name": "tranche", "dataType": ["text"]},
-            {"name": "quantum", "dataType": ["text"]},
-            {"name": "financial_maintenance_covenant", "dataType": ["text"]},
-            {"name": "addbacks_cap", "dataType": ["text"]},
-            {"name": "MFN_threshold", "dataType": ["text"]},
-            {"name": "MFN_exceptions", "dataType": ["text"]},
-            {"name": "portability", "dataType": ["text"]},
-            {"name": "lender_counsel", "dataType": ["text"]},
-            {"name": "borrower_counsel", "dataType": ["text"]},
-            {"name": "borrower", "dataType": ["text"]},
-            {"name": "guarantor", "dataType": ["text"]},
-            {"name": "admin_agent", "dataType": ["text"]},
-            {"name": "collat_agent", "dataType": ["text"]},
-            {"name": "effective_date", "dataType": ["text"]},
-        ],
-    }
-
-    try:
-        weaviate_client.schema.create_class(class_schema)
-        print("Schema created successfully")
-    except Exception as e:
-        print(f"Error creating schema in Weaviate: {e}")
+def collect_metrics_to_csv(metric: Dict[str, str | int | float], csv_file: str):
+    if not os.path.exists(csv_file):
+        with open(csv_file, "w") as file:
+            writer = csv.writer(file)
+            writer.writerow(
+                [
+                    "input_length",
+                    "response_length",
+                    "time_taken",
+                    "model",
+                    "page_number",
+                ]
+            )
+    with open(csv_file, "a") as file:
+        writer = csv.writer(file)
+        writer.writerow(
+            [
+                metric["input_length"],
+                metric["response_length"],
+                metric["time_taken"],
+                metric["model"],
+                metric["page_number"],
+            ]
+        )
 
 
 # Main function to process the file and prompt
 def process_file_and_prompt(txt_file: str, prompt_template: str):
     t0 = time.time()
-
+    responses = []
     pages = read_and_split_file(txt_file)
     print(
         f"Read {len(pages)} pages from {txt_file} in {(time.time() - t0):.2f} seconds"
     )
+    t1 = time.time()
 
     # Note PAGE_LIMIT is for testing purposes, so we don't have to wait for all pages to process before checking the results
     PAGE_LIMIT = 4
     for page in pages[:PAGE_LIMIT]:
+        print(f"Processing page {pages.index(page) + 1} of {len(pages)}")
         if page == "":
             continue
         input = prepare_prompt(page, prompt_template)
+        # Write the prompt to file
+        with open(f"page{pages.index(page) + 1}.prompt.in.txt", "w") as file:
+            file.write(input)
+        print(f"Written prompt to page{pages.index(page) + 1}.prompt.in.txt")
+        print(f"Sending to ChatGPT for page {pages.index(page) + 1}...")
+        start = time.time()
         response = send_to_chatgpt(input)
-        handle_response(response)
+        print(
+            f"Processed page {pages.index(page) + 1} in {time.time() - start:.2f} seconds"
+        )
+        # Write the response to file
+        with open(f"page{pages.index(page) + 1}.{MODEL_NAME}.out.json", "w") as file:
+            file.write(json.dumps(response, indent=2))
+        print(f"Written response to page{pages.index(page) + 1}.prompt.out.txt")
+        # Metrics (input length, response length, time taken, model used, page number)
+        print(
+            f"Metrics: Input length: {len(input)}, Response length: {len(response)}, Time taken: {time.time() - start:.2f} seconds, Model: {MODEL_NAME}, Page number: {pages.index(page) + 1}"
+        )
+        collect_metrics_to_csv(
+            {
+                "input_length": len(input),
+                "response_length": len(response),
+                "time_taken": time.time() - start,
+                "model": MODEL_NAME,
+                "page_number": pages.index(page) + 1,
+            },
+            "metrics.csv",
+        )
+        responses.append(response)
 
     # 106 pages in 296 seconds (2.8 seconds per page)
-    # t1 = time.time()
     # with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
     #     futures = []
     #     for page in pages:
@@ -217,51 +148,10 @@ def process_file_and_prompt(txt_file: str, prompt_template: str):
     #         futures.append(future)
     #     for future in concurrent.futures.as_completed(futures):
     #         response = future.result()
-    #         handle_response(response)
+    #         responses.append(response)
 
     print(f"Processed {len(pages)} pages in {time.time() - t1} seconds")
-
-
-COLUMNS = """page_number
-tranche
-quantum
-financial_maintenance_covenant
-addbacks_cap
-mFN_threshold
-mFN_exceptions
-portability
-lender_counsel
-borrower_counsel
-borrower
-guarantor
-admin_agent
-collat_agent
-effective_date
-summary
-original_page_text
-embedding"""
-
-
-def read_from_weaviate() -> List[Dict]:
-    query = f"""{{
-        Get {{
-            ChatGPTResponse {{
-                {COLUMNS} 
-            }}
-        }}
-    }}"""
-    response = weaviate_client.query.raw(query)
-    return response["data"]["Get"]["ChatGPTResponse"]
-
-
-# Function to export data to CSV
-def export_to_csv(data: List[Dict], file_path: str):
-    with open(file_path, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(
-            file, fieldnames=COLUMNS.split("\n"), quoting=csv.QUOTE_ALL
-        )
-        writer.writeheader()
-        writer.writerows(data)
+    return responses
 
 
 def prompt_2(template: str, question: str, responses: pd.DataFrame) -> str:
@@ -318,11 +208,13 @@ if __name__ == "__main__":
 
     if args.step == 1:
         print("Step 1")
-        weaviate_client.schema.delete_class("ChatGPTResponse")
-        create_weaviate_schema()
-        process_file_and_prompt(args.txtfile, args.prompt_1)
-        data = read_from_weaviate()
-        export_to_csv(data, args.csv)
+        data = process_file_and_prompt(args.txtfile, args.prompt_1)
+        print(f"Processed {len(data)} pages")
+        # Write data to json file
+        outfile = "output.json"
+        with open(outfile, "w") as file:
+            json.dump(data, file)
+        print(f"Written data to {outfile}")
 
     # elif args.step == 2:
     #     print("Step 2")

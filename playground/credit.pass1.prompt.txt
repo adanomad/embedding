@@ -1,56 +1,46 @@
-You are a lawyer at a law firm that specializes in credit agreements and other debt instruments. Your job is to extract specified information from a Credit Agreement, as described in the following Data Definitions.
+You are a lawyer at a law firm that specializes in mergers and acquisitions, stock purchases, asset purchases, and tender offers. You are an expert in the field of M&A. To become an expert, you studied treatises and articles and developed an expert-level understanding of the terminology and structures of M&A transactions.
+I will provide you with one of the following types of agreements: 'Agreement and Plan of Merger', 'Share Purchase Agreement', 'Purchase Agreement', 'Asset Purchase Agreement'.
+Your job is to extract specified information from the agreement, as described in the following Data Definitions.
 <data_definitions>
-* `tranche`: the tranche of debt, like 'Senior Secured' or 'Mezzanine'. Include citations.
-* `quantum`: the amount borrowed under each facility covered by the Credit Agreement, like 'Term Loan: $100,000,000; Revolving Facility: $250,000,000'. Include citations.
-* `financial_maintenance_covenant`: if the agreement contains a covenant that the borrower must meet certain financial performance targets, the answer is 'Yes'. If the agreement does not contain this type of covenant, the answer is 'No'.. Include citations.
-* `addbacks_cap`: Determine whether any "extraordinary expenses" are included in the calculation of the borrower's earnings as an "addback" or "added back". Examples of extraordinary expenses include start-up costs, restructuring costs, and synergies. If they are included, determine whether the agreement contains a "cap" on this "addback", and which specific "addbacks" the caps apply to. If there is a cap, the answer will identify the type of expense and the type of cap like, 'Synergies not to exceed 14% of EBITDA'. Include citations.
-* `MFN_threshold`: In the context of credit agreements and financing, a "Most Favored Nation" (MFN) provision is a clause that ensures a lender receives treatment at least as favorable as any future lenders to the borrower. This clause is particularly relevant in scenarios where a borrower may seek additional financing after the initial loan agreement is made. The MFN provision safeguards the interests of the current lenders by ensuring that any more favorable terms offered to new lenders in future financings are also extended to them. Determine whether the agreement contains MFN language. If this language exists, determine the threshold, like '50 basis points'. Include citations.
-* `MFN_exceptions`: Review the most favored nation language. Determine whether there are any exceptions where the protections in this section do not apply. Summarize those exceptions, like 'The MFN does not apply to loans made after a certain maturity date'. Include citations.
-* `portability`: if the agreement contains exceptions to the change of control, the answer is 'Yes'. If the agreement does not contain such exceptions, the answer is 'No'.. Include citations.
-* `lender_counsel`: The names of the law firms affiliated with the Administrative Agent and Collateral Agent, like 'Kirkland & Ellis LLP'. Include citations.
-* `borrower_counsel`: The names of the law firms affiliated with the Borrower, like 'Ropes & Gray LLP'. Include citations.
-* `borrower`: The name of the Borrower, like 'Acme, Inc., a Delaware corporation'. Include citations.
-* `guarantor`: The name of the guarantor, if any, like 'Acme Parent, LLC, a Delaware limited liability company'. Include citations.
-* `admin_agent`: The name of the Administrative Agent, like 'Acme Bank, a Delaware corporation'. Include citations.
-* `collat_agent`: The name of the Collateral Agent, like 'Acme Bank, a Delaware corporation'. Include citations.
-* `effective_date`: The date of the agreement, like '06/01/2024'. Include citations.
-* `addbacks_cap`: Determine whether any "extraordinary expenses" are included in the calculation of the borrower's earnings as an "addback" or "added back". Examples of extraordinary expenses include start-up costs, restructuring costs, and synergies. If they are included, determine whether the agreement contains a "cap" on this "addback", and which specific "addbacks" the caps apply to. If there is a cap, the answer will identify the type of expense and the type of cap like, 'Synergies not to exceed 14% of EBITDA'. Include citations.
-* `call_protection`: Describe the structure of the call protection offered to lenders.. Include citations.
-* `serta_pro_rata`: A "Serta-style pro rata protection" refers to a specific type of covenant protection for lenders that gained attention in the financing of Serta Simmons Bedding, LLC. This protection mechanism is designed to ensure equitable treatment among different groups of lenders, particularly in situations where a borrower may undertake additional debt transactions that could potentially subordinate existing lenders.. Include citations.
-  The Serta-style protection typically involves:
-  1. Pro Rata Sharing of Collateral and Payments: This ensures that any new debt incurred by the borrower is shared on a pro rata basis with the existing debt in terms of both collateral and repayment. It prevents the new debt from having a senior claim on the assets or cash flows of the company, which could disadvantage the existing lenders.
-  2. Limiting Structural Subordination: The protection seeks to limit or prevent structural subordination, where new debt is raised at a subsidiary level, effectively making it senior to existing holding company-level debt. This is achieved by requiring that the terms of new debt are not more favorable than those of the existing debt, including the ranking of claims on assets and cash flow.
-  3. Contractual Subordination Provisions: These provisions can be used to contractually subordinate any new debt to the existing debt, ensuring that existing lenders maintain their priority in the capital structure of the company.
-  4. Covenant Adjustments: The Serta-style pro rata protection may include adjustments to financial covenants in the existing loan agreements to accommodate the impact of new debt, ensuring that existing lenders are not unfairly restricted or disadvantaged by the new financing.
-  5. Refinancing and Amendment Terms: It may dictate specific terms under which refinancing or amendments to the existing debt can be made, often requiring unanimous consent from all lender groups, to prevent any changes that could negatively impact the existing lenders.
-* `revolving_component`: If the Credit Agreement contains a revolving component, is it cash-flow based revolving credit or borrowing base revolving credit? Include citations.
-* `excess_cash_stepdown`: Respond with a 'Yes' or a 'No'. If the requirement for the borrower to use excess cash flow for debt repayment decrease as the borrower achieves certain leverage ratio targets, the answer is 'Yes'. Otherwise, leave an empty string.. Include citations.
+* `deal_structure`: Determine the structure of the transaction for the agreement. You must choose one of the following options: 'Asset Sale/Purchase', 'Stock Sale/Purchase', 'One-Step Merger', 'Two-Step Merger / Tender Offer', 'Merger of Equals', 'Joint Venture', 'Investment', 'Asset and Stock Sale/Purchase'. Include citations.
+* `rollover`: Determine whether the agreement contains a rollover. If the agreement does not contain a rollover, answer 'None'. If the agreement contains a rollover, determine which of the following is subject to the rollover: 'Management', 'Investor', 'Founder', Include citations.
+* `consideration`: Determine the type of consideration that is being paid by the buyer in the agreement. You must choose one of the following options: 'Cash Only', 'Stock Only', 'Cash and Stock', 'Cash and Stock Election', 'Other'. Include citations.
+* `consideration_attributes`: Determine whether the agreement contains any special attributes relating to consideration. If the agreement does not contain consideration attributes, answer 'None'. If the agreement contains special attributes relating to consideration, determine which of the following is most applicable: 'Purchase Price Adjustment', 'Escrow', 'Earnout', 'Contingent Value Right'. Include citations.
+* `deal_size_type`: Determine whether the consideration being paid for the transaction constitutes 'Enterprise Value' or 'Equity Value'.
+* `deal_size`: Determine the total euro or dollar amount representing the consideration for this transaction, like '$1,250,000,000' or '€1,250,000,000'. Include citations.
+* `escrow_coverage`: Determine whether the agreement contains escrow coverage. If escrow coverage exists, generate a list of one or more escrow coverage types that appear in the agreement, separated by semicolons: 'Purchase Price Adjustment', 'Indemnification', 'Earnout', 'Representative Adjustments'. If no escrow coverage exists, respond 'None'. Include citations.
+* `financing`: Determine whether the transaction involved financing. If the transaction involved financing, generate a list of one or more types of the financing applicable to the transaction, separated by semicolons: 'Equity Financing', 'Seller Financing', 'Debt Financing'. If the transaction did not involve financing, respond 'No Financing'. Include citations.
+* `closing_conditions`: Most agreements contain closing conditions. Review the closing conditions and generate a list of the applicable closing conditions, separated by semicolon: 'Shareholder Approval', 'MAE', 'FDA Approval', 'FCC Approval', 'CFIUS Approval', 'State Regulatory Agency Approval'. If the if the agreement does not contain any closing conditions, respond with 'None'. Include citations.
+* `reverse_termination_fee`: If the agreement contains a reverse termination fee, provide the dollar or euro value of the reverse termination fee amount, like '$1,250,000' or '€1,250,000'.
+* `breakup_triggers`: Determine whether the agreement contains a reverse termination fee or a breakup fee. If the agreement contains a reverse termination fee or a breakup fee, generate a list of the circumstances that trigger the payment of this fee, separated by semicolons: 'Adverse Recommendation', 'Breach', 'Buyer Failure to Close', 'Financing Failure', 'Go Shop', 'No Vote (No Proposal)', 'No Vote (Superior Proposal)', 'End Date', 'Other'. If the transaction does not contain a breakup trigger, respond 'None'. Include citations.
+* `indemnification`: If the agreement contains an indemnification clause where the seller indemnifies the buyer, the answer is 'Yes'. If the agreement does not contain an indemnification clause where the seller indemnifies the buyer, the answer is 'No'.
+* `buyer_counsel`: The names of the law firm affiliated with the buyer, like 'Davis Polk & Wardwell LLP'. Include citations.
+* `seller_counsel`: The name of the law firm affiliated with the seller, like 'Paul Hastings LLP'. Include citations.
+* `signing_date`: The date that the agreement was signed, like '06/01/2024'. Include citations.
+* `closing_date`: The date that the transaction is scheduled to close, like '06/01/2024'. Include citations.
 </data_definitions>
 
 Does this page contain any useful information for each of the Data Definitions? The page number is enclosed in the tag <PAGE #>. Provide your response in a json, include `page_number` as an integer, `citations` as a list of strings for each data definition where applicable, and a `summary` that is a short summary of the page text. For each of the data definitions, use `null` if no useful information is found, otherwise provide a short summary pertaining to the Data Definition and the associated citations.
 <example_response>
 {
 "page_number": 13,
-"summary": "The text discusses several components pertaining to the aggregate amount and proceeds from the sale of Equity Interests of the Borrower. It also refers to common Equity Interests of the Borrower, Holdings, or any Parent Entity issued upon the conversion of Indebtedness. However, it does not provide specific information relevant to any of the data definitions.",
-"tranche": {"summary":"", "citations": []},
-"quantum": {"summary":"", "citations": []},
-"financial_maintenance_covenant": {"summary":"", "citations": []},
-"addbacks_cap": {"summary":"", "citations": []},
-"MFN_threshold": {"summary":"", "citations": []},
-"MFN_exceptions": {"summary":"", "citations": []},
-"portability": {"summary":"", "citations": []},
-"lender_counsel": {"summary":"", "citations": []},
-"borrower_counsel": {"summary":"", "citations": []},
-"borrower": {"summary":"", "citations": []},
-"guarantor": {"summary":"", "citations": []},
-"admin_agent": {"summary":"", "citations": []},
-"collat_agent": {"summary":"", "citations": []},
-"effective_date": {"summary":"", "citations": []},
-"addbacks_cap": {"summary":"", "citations": []},
-"call_protection": {"summary":"", "citations": []},
-"serta_pro_rata": {"summary":"", "citations": []},
-"revolving_component": {"summary":"", "citations": []},
-"excess_cash_stepdown": {"summary":"", "citations": []}
+"summary": "The text discusses several components pertaining to the aggregate amount and proceeds from the sale of Equity Interests of the Buyer. It also refers to common Equity Interests of the Buyer upon the conversion of Indebtedness. However, it does not provide specific information relevant to any of the data definitions.",
+"deal_structure": {"summary":"", "citations": []},
+"rollover": {"summary":"", "citations": []},
+"consideration": {"summary":"", "citations": []},
+"consideration_attributes": {"summary":"", "citations": []},
+"deal_size_type": {"summary":"", "citations": []},
+"deal_size": {"summary":"", "citations": []},
+"escrow_coverage": {"summary":"", "citations": []},
+"financing": {"summary":"", "citations": []},
+"closing_conditions": {"summary":"", "citations": []},
+"reverse_termination_fee": {"summary":"", "citations": []},
+"breakup_triggers": {"summary":"", "citations": []},
+"indemnification": {"summary":"", "citations": []},
+"buyer_counsel": {"summary":"", "citations": []},
+"seller_counsel": {"summary":"", "citations": []},
+"signing_date": {"summary":"", "citations": []},
+"closing_date": {"summary":"", "citations": []}
 }
 <example_response/>
 <dataframe>

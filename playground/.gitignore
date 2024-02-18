@@ -3,3 +3,7 @@ weaviatedb/
 *.zip
 *.xlsx
 __pycache__/
+*.json
+*.in.*
+*.out.*
+*.csv
