@@ -8,6 +8,10 @@ import fitz  # PyMuPDF
 import os
 import argparse
 
+# Constants
+MIN_CHARS = 50  # Minimum characters for a sentence
+MAX_CHARS = 500  # Maximum characters for a sentence
+
 
 def extract_images_and_text(pdf_path, output_folder, inject_tokens=False):
     file_name = os.path.basename(pdf_path)
@@ -25,16 +29,19 @@ def extract_images_and_text(pdf_path, output_folder, inject_tokens=False):
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
 
-            # Extract text and save to a file
             text = page.get_text()
-            all_text_file.write(f"<PAGE {page_num + 1}/>\n")
             if inject_tokens:
+                # This could cause string find issues if the text is not found in original document
+                # text = text.replace("\n", " ")
+                # text = re.sub(r"\s+", " ", text).strip()
                 indexed_sentences = extract_segments(text)
-                text = inject_indices(indexed_sentences, page_num + 1)
-            all_text_file.write(text)
+                text = inject_indices_simple(indexed_sentences, page_num)
+                all_text_file.write(text)
+            else:
+                all_text_file.write(f"<PAGE {page_num}/>\n")
 
-            # with open(f"{output_folder}/{page_num + 1}.txt", "w") as text_file:
-            #     text_file.write(f"<PAGE {page_num + 1}/>\n")
+            # with open(f"{output_folder}/{page_num}.txt", "w") as text_file:
+            #     text_file.write(f"<PAGE {page_num}/>\n")
             #     text_file.write(text)
 
             # Extract images
@@ -45,7 +52,7 @@ def extract_images_and_text(pdf_path, output_folder, inject_tokens=False):
                 image_bytes = base_image["image"]
 
                 # Save the image
-                with open(f"{output_folder}/{page_num + 1}-{i}.jpg", "wb") as img_file:
+                with open(f"{output_folder}/{page_num}-{i}.jpg", "wb") as img_file:
                     img_file.write(image_bytes)
     all_text_file.close()
     print(f"Text and images extracted from {pdf_path} to {output_folder}")
@@ -64,7 +71,7 @@ def extract_from_folder(folder_path, output_folder, inject_tokens=False):
     for file in os.listdir(folder_path):
         if file.endswith(".pdf"):
             pdf_path = os.path.join(folder_path, file)
-            extract_images_and_text(pdf_path, output_folder)
+            extract_images_and_text(pdf_path, output_folder, inject_tokens)
 
 
 def extract_segments(text: str) -> list[str]:
@@ -93,18 +100,20 @@ def extract_segments(text: str) -> list[str]:
     # Sort indices and extract segments based on these indices
     segment_indices = sorted(list(set(segment_indices)))  # Remove duplicates and sort
     segments = []
+    if not segment_indices:
+        return [text]
     for i in range(len(segment_indices) - 1):
         # Extract text segments based on the indices
-        segments.append(text[segment_indices[i] : segment_indices[i + 1]].strip())
+        segments.append(text[segment_indices[i] : segment_indices[i + 1]])
 
     # Add the final segment if not captured
     if segment_indices:
-        segments.append(text[segment_indices[-1] :].strip())
+        segments.append(text[segment_indices[-1] :])
 
     return segments
 
 
-def inject_indices(indexed_sentences: list[str], page: int) -> str:
+def inject_indices_simple(indexed_sentences: list[str], page: int) -> str:
     # Initialize an empty string to hold the result
     combined_with_indices = ""
 
@@ -116,6 +125,54 @@ def inject_indices(indexed_sentences: list[str], page: int) -> str:
         combined_with_indices += f"<P{page}S{i}/>{sentence}"
 
     return combined_with_indices
+
+
+def merge_short_sentences(sentences: list[str]) -> list[str]:
+    """Merge sentences shorter than MIN_CHARS characters with the next one."""
+    i = 0
+    merged_sentences = []
+    while i < len(sentences):
+        current_sentence = sentences[i]
+        if len(current_sentence) < MIN_CHARS and i + 1 < len(sentences):
+            next_sentence = sentences[i + 1]
+            merged_sentence = current_sentence + " " + next_sentence
+            merged_sentences.append(merged_sentence)
+            i += 2  # Skip the next sentence as it's already merged
+        else:
+            merged_sentences.append(current_sentence)
+            i += 1
+    return merged_sentences
+
+
+def split_long_sentences(sentences: list[str]) -> list[str]:
+    """Split sentences longer than MAX_CHARS characters at a comma or period."""
+    split_sentences = []
+    for sentence in sentences:
+        if len(sentence) > MAX_CHARS:
+            split_index = max(
+                sentence.rfind(",", 0, MAX_CHARS), sentence.rfind(".", 0, MAX_CHARS)
+            )
+            if split_index != -1:
+                first_part = sentence[: split_index + 1]
+                second_part = sentence[split_index + 2 :].strip()
+                split_sentences.extend([first_part, second_part])
+            else:
+                split_sentences.append(sentence)
+        else:
+            split_sentences.append(sentence)
+    return split_sentences
+
+
+def inject_indices(indexed_sentences: list[str], page: int) -> str:
+    """Inject indices into sentences, merging short ones and splitting long ones."""
+    merged_sentences = merge_short_sentences(indexed_sentences)
+    final_sentences = split_long_sentences(merged_sentences)
+
+    combined_with_indices = ""
+    for index, sentence in enumerate(final_sentences, start=1):
+        combined_with_indices += f"<P{page}S{index}/>{sentence}\n"
+
+    return combined_with_indices.strip()
 
 
 def main():
@@ -139,6 +196,12 @@ def main():
         extract_from_folder(args.folder, args.outfolder, args.inject_tokens)
     elif args.pdf:
         extract_images_and_text(args.pdf, args.outfolder, args.inject_tokens)
+    else:
+        extract_images_and_text(
+            "../data/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf",
+            "../data/m&a/lumen/",
+            True,
+        )
 
 
 if __name__ == "__main__":
