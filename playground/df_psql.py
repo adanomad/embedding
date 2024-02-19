@@ -1,3 +1,5 @@
+import glob
+import json
 import os
 from posixpath import basename
 import pandas as pd
@@ -179,11 +181,45 @@ def insert_pass1_results(id: int):
     )
 
 
+def insert_pass2_results(id: int):
+    # Pattern to match the files
+    file_pattern = "pass2.*.prompt.out.txt"
+
+    # List to hold JSON data from each file
+    data_list = []
+
+    # Find and read each file
+    for file_path in glob.glob(file_pattern):
+        with open(file_path, "r") as file:
+
+            file_content = file.read()
+            # Check and remove first and last line as they contain ```json and ```, respectively
+            if file_content.splitlines()[0] == "```json":
+                joined = "".join(file_content.splitlines()[1:-1])
+                data = json.loads(joined)
+            else:
+                data = json.loads(file_content)
+
+            data_list.append(data)
+
+    # Convert the list of dictionaries into a DataFrame
+    df = pd.DataFrame(data_list)
+
+    # Save the DataFrame to a CSV file
+    df.to_csv("pass2.result.csv", index=False)
+    df["document_id"] = id
+    df.to_sql(
+        "pass2_results", engine, index=False, if_exists="append", schema="experiments"
+    )
+    print(f"CSV file saved with {len(df)} records.")
+
+
 if __name__ == "__main__":
     # init_schema()
     # id = process_and_insert_txt_to_db(txtfile)
     # insert_in_out_table(prompt_path, id)
     id = 4
     # insert_metrics(id)
-    insert_pass1_results(id)
+    # insert_pass1_results(id)
+    insert_pass2_results(id)
     print("Data inserted successfully.")

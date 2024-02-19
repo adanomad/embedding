@@ -323,3 +323,8 @@ if __name__ == "__main__":
             responses = [
                 future.result() for future in concurrent.futures.as_completed(futures)
             ]
+        # Write responses to file
+        for idx, response in enumerate(responses):
+            with open(f"pass2.{idx + 1}.prompt.out.txt", "w") as file:
+                file.write(response)
+        print(f"Written {len(responses)} responses to pass2.*.prompt.out.txt")
