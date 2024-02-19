@@ -165,7 +165,25 @@ def init_schema(schema_name="experiments"):
         print("Tables are ensured in the database.")
 
 
+def insert_metrics(id: int):
+    df = pd.read_csv("metrics.csv")
+    df["document_id"] = id
+    df.to_sql("metrics", engine, index=False, if_exists="append", schema="experiments")
+
+
+def insert_pass1_results(id: int):
+    df = pd.read_csv("pass2.csv")
+    df["document_id"] = id
+    df.to_sql(
+        "pass1_results", engine, index=False, if_exists="append", schema="experiments"
+    )
+
+
 if __name__ == "__main__":
-    init_schema()
-    id = process_and_insert_txt_to_db(txtfile)
-    insert_in_out_table(prompt_path, id)
+    # init_schema()
+    # id = process_and_insert_txt_to_db(txtfile)
+    # insert_in_out_table(prompt_path, id)
+    id = 4
+    # insert_metrics(id)
+    insert_pass1_results(id)
+    print("Data inserted successfully.")
