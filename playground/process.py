@@ -15,6 +15,7 @@ from typing import List, Dict
 
 MODEL_NAME = "gpt-4-1106-preview"
 # MODEL_NAME = "gpt-3.5-turbo"
+MAX_TEXT_LENGTH = 4096 * 4  # 16KB
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -23,19 +24,19 @@ if not api_key:
 openai_client = OpenAI(api_key=api_key)
 
 
-# Function to read and split the text file by page
 def read_and_split_file(file_path: str) -> List[str]:
-    with open(file_path, "r") as file:
-        content = file.read()
-    # Replace newlines with spaces
-    content = content.replace("\n", " ")
-    # Use a split operation that retains the <PAGE prefix by using a regex split
-    parts = re.split(r"(\<PAGE \d+.\>)", content)  # Split and keep <PAGE x>
     pages = []
-    # Skip the first element if it's empty and start re-constructing pages with their <PAGE x> tags
-    for i in range(1, len(parts), 2):
-        pages.append(parts[i] + parts[i + 1])
-
+    with open(file_path, "r") as file:
+        current_page = ""
+        for line in file:
+            if len(line) + len(current_page) > MAX_TEXT_LENGTH:
+                pages.append(current_page)
+                current_page = line
+            else:
+                current_page += " " + line
+    # Don't forget to add the last page if it's not empty
+    if current_page:
+        pages.append(current_page)
     return pages
 
 
