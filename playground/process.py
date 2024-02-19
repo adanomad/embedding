@@ -126,29 +126,28 @@ def process_file_and_prompt(txt_file: str, prompt_template: str):
     )
     t1 = time.time()
 
-    # Note PAGE_LIMIT is for testing purposes, so we don't have to wait for all pages to process before checking the results
-    PAGE_LIMIT = 4
-    for idx, page in enumerate(pages[:PAGE_LIMIT]):
-        print(f"Processing page {pages.index(page) + 1} of {len(pages)}")
-        if page == "":
-            continue
-        input = prepare_prompt(page, prompt_template, idx)
+    # # Note PAGE_LIMIT is for testing purposes, so we don't have to wait for all pages to process before checking the results
+    # PAGE_LIMIT = 4
+    # for idx, page in enumerate(pages[:PAGE_LIMIT]):
+    #     print(f"Processing page {pages.index(page) + 1} of {len(pages)}")
+    #     if page == "":
+    #         continue
+    #     input = prepare_prompt(page, prompt_template, idx)
 
-        print(f"Written prompt to page{idx + 1}.prompt.in.txt")
-        response = send_to_chatgpt(input, idx + 1)
-        responses.append(response)
+    #     print(f"Written prompt to page{idx + 1}.prompt.in.txt")
+    #     response = send_to_chatgpt(input, idx + 1)
+    #     responses.append(response)
 
-    # 106 pages in 296 seconds (2.8 seconds per page)
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-    #     futures = []
-    #     for idx, page in enumerate(pages):
-    #         if page == "":
-    #             continue
-    #         input = prepare_prompt(page, prompt_template, idx)
-    #         futures.append(executor.submit(send_to_chatgpt, input, idx + 1))
-    #     for future in concurrent.futures.as_completed(futures):
-    #         response = future.result()
-    #         responses.append(response)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = []
+        for idx, page in enumerate(pages):
+            if page == "":
+                continue
+            input = prepare_prompt(page, prompt_template, idx)
+            futures.append(executor.submit(send_to_chatgpt, input, idx + 1))
+        for future in concurrent.futures.as_completed(futures):
+            response = future.result()
+            responses.append(response)
 
     print(f"Processed {len(pages)} pages in {time.time() - t1} seconds")
     return responses
@@ -192,10 +191,46 @@ def part2_chatgpt(index: int, prompt: str) -> str:
         return f"Error processing question {index}: {str(e)}"
 
 
+def read_and_clean_data(file_path):
+    """Read JSON data from a file and remove specified columns."""
+    with open(file_path, "r") as file:
+        data = json.load(file)
+    cleaned_data = [
+        {
+            k: v
+            for k, v in page.items()
+            if k not in ["page_number", "summary", "original_page_text", "embedding"]
+        }
+        for page in data
+    ]
+    return pd.DataFrame(cleaned_data)
+
+
+def filter_data_for_sql(df):
+    """Filter data to prepare rows for SQL insertion."""
+    to_sql_table = []
+    for topic in df.columns:
+        filtered_df = df[df[topic].notna()][[topic]]
+        print(f"Transformed {len(filtered_df)} rows for {topic}")
+        for _, row in filtered_df.iterrows():
+            summary = row[topic]["summary"]
+            citations = row[topic]["citations"]
+            if summary == "" or len(citations) == 0:
+                continue
+            row = {
+                "topic": topic,
+                "summary": summary,
+                "citations": citations,
+            }
+            to_sql_table.append(row)
+    return to_sql_table
+
+
 # Command-line argument parsing
 if __name__ == "__main__":
+    outfile = "output.json"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--step", type=int, default=1)
+    parser.add_argument("--step", type=int, default=2)
     parser.add_argument(
         "--txtfile",
         type=str,
@@ -203,7 +238,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--prompt_1", type=str, default="credit.pass1.prompt.txt")
     parser.add_argument("--prompt_2", type=str, default="credit.pass2.prompt.txt")
-    parser.add_argument("--csv", type=str, default="DAVEBUSTER.csv")
+    parser.add_argument("--pass1_file", type=str, default=outfile)
     args = parser.parse_args()
 
     if args.step == 1:
@@ -211,18 +246,16 @@ if __name__ == "__main__":
         data = process_file_and_prompt(args.txtfile, args.prompt_1)
         print(f"Processed {len(data)} pages")
         # Write data to json file
-        outfile = "output.json"
         with open(outfile, "w") as file:
             json.dump(data, file)
         print(f"Written data to {outfile}")
 
     elif args.step == 2:
         print("Step 2")
-        df = pd.read_csv(args.csv)
-        print(f"Read {len(df)} rows from {args.csv}")
-        dataframes_dict = {}
-        # make topic columns without the page_number, summary, original_page_text, and embedding columns
-        topic_columns = set(df.columns.tolist()) - set(
-            ["page_number", "summary", "original_page_text", "embedding"]
-        )
+        df = read_and_clean_data(args.pass1_file)
+        print(f"Read {len(df)} rows from {args.pass1_file}")
+        topic_columns = df.columns.tolist()
         print(f"Topic columns: {topic_columns}")
+        to_sql_table = filter_data_for_sql(df)
+        # Write to a file
+        pd.DataFrame(to_sql_table).to_csv("to_sql_table.csv", index=False)
