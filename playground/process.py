@@ -229,7 +229,6 @@ def filter_data_for_sql(df):
 
 # Command-line argument parsing
 if __name__ == "__main__":
-    outfile = "output.json"
     parser = argparse.ArgumentParser()
     parser.add_argument("--step", type=int, default=2)
     parser.add_argument(
@@ -239,7 +238,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--prompt_1", type=str, default="credit.pass1.prompt.txt")
     parser.add_argument("--prompt_2", type=str, default="credit.pass2.prompt.txt")
-    parser.add_argument("--pass1_file", type=str, default=outfile)
+    parser.add_argument("--pass1results", type=str, default="output.json")
     args = parser.parse_args()
 
     if args.step == 1:
@@ -247,16 +246,16 @@ if __name__ == "__main__":
         data = process_file_and_prompt(args.txtfile, args.prompt_1)
         print(f"Processed {len(data)} pages")
         # Write data to json file
-        with open(outfile, "w") as file:
+        with open(args.pass1results, "w") as file:
             json.dump(data, file)
-        print(f"Written data to {outfile}")
+        print(f"Written pass 1 results to {args.pass1results}")
 
     elif args.step == 2:
         print("Step 2")
-        df = read_and_clean_data(args.pass1_file)
-        print(f"Read {len(df)} rows from {args.pass1_file}")
+        df = read_and_clean_data(args.pass1results)
+        print(f"Read {len(df)} rows from {args.pass1results}")
         topic_columns = df.columns.tolist()
         print(f"Topic columns: {topic_columns}")
         to_sql_table = filter_data_for_sql(df)
         # Write to a file
-        pd.DataFrame(to_sql_table).to_csv("to_sql_table.csv", index=False)
+        pd.DataFrame(to_sql_table).to_csv("pass2.csv", index=False)
