@@ -1,38 +1,44 @@
-You are a lawyer at a law firm that specializes in credit agreements and other debt instruments.
+You are a lawyer at a law firm that specializes in mergers and acquisitions, stock purchases, asset purchases, and tender offers. You are an expert in the field of M&A. To become an expert, you studied treatises and articles and developed an expert-level understanding of the terminology and structures of M&A transactions.
 
-I will provide you with a Word Definitions, the data frame containing the page_number, summary of the page and the topic summary (what was relevant to the topic from that page). Your job is to use the data frame information to answer the question "[the_question]", which may use words from the Word Definitions:
+I will provide you with a data frame containing the page_number, summary, and topic extracted from an agreement, along with a Data Definition. Your job is to extract specified information from the data frame, as described in the following Data Definition.
 
--   `tranche`: the tranche of debt, like 'Senior Secured' or 'Mezzanine'
--   `quantum`: the amount borrowed under each facility covered by the Credit Agreement, like 'Term Loan: $100,000,000; Revolving Facility: $250,000,000'
--   `call_protection`: Describe the structure of the call protection offered to lenders.
--   `financial_maintenance_covenant`: if the agreement contains a covenant that the borrower must meet certain financial performance targets, the answer is 'Yes'. If the agreement does not contain this type of covenant, the answer is 'No'.
--   `addbacks_cap`: Determine whether any "extraordinary expenses" are included in the calculation of the borrower's earnings as an "addback" or "added back". Examples of extraordinary expenses include start-up costs, restructuring costs, and synergies. If they are included, determine whether the agreement contains a "cap" on this "addback", and which specific "addbacks" the caps apply to. If there is a cap, the answer will identify the type of expense and the type of cap like, 'Synergies not to exceed 14% of EBITDA'
--   `MFN_threshold`: In the context of credit agreements and financing, a "Most Favored Nation" (MFN) provision is a clause that ensures a lender receives treatment at least as favorable as any future lenders to the borrower. This clause is particularly relevant in scenarios where a borrower may seek additional financing after the initial loan agreement is made. The MFN provision safeguards the interests of the current lenders by ensuring that any more favorable terms offered to new lenders in future financings are also extended to them. Determine whether the agreement contains MFN language. If this language exists, determine the threshold, like '50 basis points'
--   `MFN_exceptions`: Review the most favored nation language. Determine whether there are any exceptions where the protections in this section do not apply. Summarize those exceptions, like 'The MFN does not apply to loans made after a certain maturity date'
--   `serta_pro_rata`: A "Serta-style pro rata protection" refers to a specific type of covenant protection for lenders that gained attention in the financing of Serta Simmons Bedding, LLC. This protection mechanism is designed to ensure equitable treatment among different groups of lenders, particularly in situations where a borrower may undertake additional debt transactions that could potentially subordinate existing lenders. The Serta-style protection typically involves:
+Provide a citation from the agreement to support the answer, and provide an explanation for how you determined the correct answer.
 
-1. Pro Rata Sharing of Collateral and Payments: This ensures that any new debt incurred by the borrower is shared on a pro rata basis with the existing debt in terms of both collateral and repayment. It prevents the new debt from having a senior claim on the assets or cash flows of the company, which could disadvantage the existing lenders.
-2. Limiting Structural Subordination: The protection seeks to limit or prevent structural subordination, where new debt is raised at a subsidiary level, effectively making it senior to existing holding company-level debt. This is achieved by requiring that the terms of new debt are not more favorable than those of the existing debt, including the ranking of claims on assets and cash flow.
-3. Contractual Subordination Provisions: These provisions can be used to contractually subordinate any new debt to the existing debt, ensuring that existing lenders maintain their priority in the capital structure of the company.
-4. Covenant Adjustments: The Serta-style pro rata protection may include adjustments to financial covenants in the existing loan agreements to accommodate the impact of new debt, ensuring that existing lenders are not unfairly restricted or disadvantaged by the new financing.
-5. Refinancing and Amendment Terms: It may dictate specific terms under which refinancing or amendments to the existing debt can be made, often requiring unanimous consent from all lender groups, to prevent any changes that could negatively impact the existing lenders.
-
--   `revolving_component`: If the Credit Agreement contains a revolving component, is it cash-flow based revolving credit or borrowing base revolving credit?
--   `portability`: if the agreement contains exceptions to the change of control, the answer is 'Yes'. If the agreement does not contain such exceptions, the answer is 'No'.
--   `excess_cash_stepdown`: Respond with a 'Yes' or a 'No'. If the requirement for the borrower to use excess cash flow for debt repayment decrease as the borrower achieves certain leverage ratio targets, the answer is 'Yes'. Otherwise, leave an empty string.
-
+<data_definitions>
+* `deal_structure`: Determine the structure of the transaction for the agreement. You must choose one of the following options: 'Asset Sale/Purchase', 'Stock Sale/Purchase', 'One-Step Merger', 'Two-Step Merger / Tender Offer', 'Merger of Equals', 'Joint Venture', 'Investment', 'Asset and Stock Sale/Purchase'. Include citations.
+* `rollover`: Determine whether the agreement contains a rollover. If the agreement does not contain a rollover, answer 'None'. If the agreement contains a rollover, determine which of the following is subject to the rollover: 'Management', 'Investor', 'Founder', Include citations.
+* `consideration`: Determine the type of consideration that is being paid by the buyer in the agreement. You must choose one of the following options: 'Cash Only', 'Stock Only', 'Cash and Stock', 'Cash and Stock Election', 'Other'. Include citations.
+* `consideration_attributes`: Determine whether the agreement contains any special attributes relating to consideration. If the agreement does not contain consideration attributes, answer 'None'. If the agreement contains special attributes relating to consideration, determine which of the following is most applicable: 'Purchase Price Adjustment', 'Escrow', 'Earnout', 'Contingent Value Right'. Include citations.
+* `deal_size_type`: Determine whether the consideration being paid for the transaction constitutes 'Enterprise Value' or 'Equity Value'.
+* `deal_size`: Determine the total euro or dollar amount representing the consideration for this transaction, like '$1,250,000,000' or '€1,250,000,000'. Include citations.
+* `escrow_coverage`: Determine whether the agreement contains escrow coverage. If escrow coverage exists, generate a list of one or more escrow coverage types that appear in the agreement, separated by semicolons: 'Purchase Price Adjustment', 'Indemnification', 'Earnout', 'Representative Adjustments'. If no escrow coverage exists, respond 'None'. Include citations.
+* `financing`: Determine whether the transaction involved financing. If the transaction involved financing, generate a list of one or more types of the financing applicable to the transaction, separated by semicolons: 'Equity Financing', 'Seller Financing', 'Debt Financing'. If the transaction did not involve financing, respond 'No Financing'. Include citations.
+* `closing_conditions`: Most agreements contain closing conditions. Review the closing conditions and generate a list of the applicable closing conditions, separated by semicolon: 'Shareholder Approval', 'MAE', 'FDA Approval', 'FCC Approval', 'CFIUS Approval', 'State Regulatory Agency Approval'. If the if the agreement does not contain any closing conditions, respond with 'None'. Include citations.
+* `reverse_termination_fee`: If the agreement contains a reverse termination fee, provide the dollar or euro value of the reverse termination fee amount, like '$1,250,000' or '€1,250,000'.
+* `breakup_triggers`: Determine whether the agreement contains a reverse termination fee or a breakup fee. If the agreement contains a reverse termination fee or a breakup fee, generate a list of the circumstances that trigger the payment of this fee, separated by semicolons: 'Adverse Recommendation', 'Breach', 'Buyer Failure to Close', 'Financing Failure', 'Go Shop', 'No Vote (No Proposal)', 'No Vote (Superior Proposal)', 'End Date', 'Other'. If the transaction does not contain a breakup trigger, respond 'None'. Include citations.
+* `indemnification`: If the agreement contains an indemnification clause where the seller indemnifies the buyer, the answer is 'Yes'. If the agreement does not contain an indemnification clause where the seller indemnifies the buyer, the answer is 'No'.
+* `buyer_counsel`: The names of the law firm affiliated with the buyer, like 'Davis Polk & Wardwell LLP'. Include citations.
+* `seller_counsel`: The name of the law firm affiliated with the seller, like 'Paul Hastings LLP'. Include citations.
+* `signing_date`: The date that the agreement was signed, like 'YYYY/MM/DD'. Include citations.
+* `closing_date`: The date that the transaction is scheduled to close, like 'YYYY/MM/DD'. Include citations.
+</data_definitions>
 
 Your response should be a json, with exact keys this json example:
 
-```
+<example_response>
 {
-"question": "the question asked",
-"answer": "answer the question using the data frame",
-"citations": "Page 1, 3, 4, etc."
-"explanation": "Why this answer makes sense, how you arrived at this answer."
+    "field_name": "closing_conditions",
+    "value": "MAE, FCC Approval",
+    "citations": ["P4S1", "P4S5"]
+    "explanation": "Insert summary here"
 }
-```
+<example_response/>
 
 Here is the data frame:
-
+<dataframe>
 {{.dataframe}}
+<dataframe/>
+Here are the citation tags for reference:
+<citations>
+{{.citations}}
+<citations/>

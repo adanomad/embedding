@@ -12,12 +12,19 @@ import pandas as pd
 from typing import Optional
 from pydantic import BaseModel
 from typing import List, Dict
+from sqlalchemy import create_engine, text
+import ast
+from more_itertools import flatten
 
 MODEL_NAME = "gpt-4-1106-preview"
 # MODEL_NAME = "gpt-3.5-turbo"
 MAX_TEXT_LENGTH = 4096 * 4  # 16KB
 
 load_dotenv()
+
+url = os.getenv("POSTGRES_DB_CREDENTIALS")
+engine = create_engine(url)  # type: ignore
+
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("No OpenAI API key found in environment variables")
@@ -154,25 +161,64 @@ def process_file_and_prompt(txt_file: str, prompt_template: str):
     return responses
 
 
-def prompt_2(template: str, question: str, responses: pd.DataFrame) -> str:
-    prompt = template.replace("[the_question]", question)
-    prompt += (
-        "---\n"
-        + "page_number\tsummary\t"
-        + "\t".join(responses.columns.difference(["page_number", "summary"]))
-        + "\n"
-    )
-    for _, row in responses.iterrows():
-        summary = row["summary"] if pd.notna(row["summary"]) else "No summary provided."
-        page_info = f"{row['page_number']}\t{summary}"
-        for topic in responses.columns.difference(["page_number", "summary"]):
-            page_info += (
-                f"\t{row[topic] if pd.notna(row[topic]) else 'No data provided.'}"
-            )
-        prompt += page_info + "\n"
-    prompt += "---"
+def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
+    """
+    Prompt 2 needs to look up the citations column and for each citation string,
+    get the relevant quote from the summary column in documents_tags table
+    and then ask the question to the model.
+    """
+    # The response may have whitespace, so we need to strip it
+    responses = responses.map(lambda x: x.strip() if isinstance(x, str) else x)
+    responses.columns = responses.columns.str.strip()
 
-    return prompt
+    # Read the template_path file
+    with open(template_path, "r") as file:
+        template = file.read()
+    DATAFRAME_PLACEHOLDER = "{{.dataframe}}"
+    CITATIONS_PLACEHOLDER = "{{.citations}}"
+    if DATAFRAME_PLACEHOLDER not in template:
+        raise ValueError(
+            f"Prompt file {template} does not contain {DATAFRAME_PLACEHOLDER}"
+        )
+    if CITATIONS_PLACEHOLDER not in template:
+        raise ValueError(
+            f"Prompt file {template} does not contain {CITATIONS_PLACEHOLDER}"
+        )
+    # Read documents_tags table
+    query = "SELECT * FROM experiments.documents_tags WHERE document_id = 2"
+    df_documents_tags = pd.read_sql_query(query, engine)
+    unique_topics = responses["topic"].unique()
+    prompts = []
+    for topic in unique_topics:
+        filtered_df = responses[responses["topic"] == topic]
+        dataframe_texts = (
+            filtered_df[["citations", "summary"]]
+            .apply(lambda x: f"{x['citations']} {x['summary']}", axis=1)
+            .to_list()
+        )
+        topic_prompt = template.replace(
+            DATAFRAME_PLACEHOLDER, "\n".join(dataframe_texts)
+        )
+        print(f"Topic {topic}: {len(filtered_df)} rows")
+        # Get relevant tags from documents_tags
+
+        df_citations = filtered_df["citations"].apply(ast.literal_eval)
+
+        tags = sorted(set(flatten(df_citations.to_list())))
+        # filter df_documents_tags to only include rows where the tag column value is in the tags set
+        filtered_df_documents_tags = df_documents_tags[
+            df_documents_tags["tag"].isin(tags)
+        ][["tag", "line"]]
+
+        combined_strings = filtered_df_documents_tags.apply(
+            lambda x: f"{x['tag']} {x['line']}", axis=1
+        ).tolist()
+        combined_string = "\n".join(combined_strings)
+        topic_prompt = topic_prompt.replace(CITATIONS_PLACEHOLDER, combined_string)
+
+        prompts.append(topic_prompt)
+
+    return prompts
 
 
 def part2_chatgpt(index: int, prompt: str) -> str:
@@ -238,7 +284,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--prompt_1", type=str, default="credit.pass1.prompt.txt")
     parser.add_argument("--prompt_2", type=str, default="credit.pass2.prompt.txt")
-    parser.add_argument("--pass1results", type=str, default="output.json")
+    parser.add_argument("--pass1results", type=str, default="pass1.results.json")
     args = parser.parse_args()
 
     if args.step == 1:
@@ -249,9 +295,6 @@ if __name__ == "__main__":
         with open(args.pass1results, "w") as file:
             json.dump(data, file)
         print(f"Written pass 1 results to {args.pass1results}")
-
-    elif args.step == 2:
-        print("Step 2")
         df = read_and_clean_data(args.pass1results)
         print(f"Read {len(df)} rows from {args.pass1results}")
         topic_columns = df.columns.tolist()
@@ -259,3 +302,24 @@ if __name__ == "__main__":
         to_sql_table = filter_data_for_sql(df)
         # Write to a file
         pd.DataFrame(to_sql_table).to_csv("pass2.csv", index=False)
+    elif args.step == 2:
+        print("Step 2")
+        df = pd.read_csv("pass2.csv")
+        print(f"Read {len(df)} rows from pass2.csv")
+        prompts = create_collect_prompts(
+            args.prompt_2,
+            df,
+        )
+        print(f"Created {len(prompts)} prompts")
+        # Write prompts to file
+        for idx, prompt in enumerate(prompts):
+            with open(f"pass2.{idx + 1}.prompt.in.txt", "w") as file:
+                file.write(prompt)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = []
+            for idx, prompt in enumerate(prompts):
+                futures.append(executor.submit(part2_chatgpt, idx, prompt))
+            responses = [
+                future.result() for future in concurrent.futures.as_completed(futures)
+            ]
