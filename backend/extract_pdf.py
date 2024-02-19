@@ -9,8 +9,8 @@ import os
 import argparse
 
 # Constants
-MIN_CHARS = 50  # Minimum characters for a sentence
-MAX_CHARS = 500  # Maximum characters for a sentence
+MIN_CHARS = 120  # Minimum characters for a sentence
+MAX_CHARS = 360  # Maximum characters for a sentence
 
 
 def extract_images_and_text(pdf_path, output_folder, inject_tokens=False):
@@ -32,10 +32,10 @@ def extract_images_and_text(pdf_path, output_folder, inject_tokens=False):
             text = page.get_text()
             if inject_tokens:
                 # This could cause string find issues if the text is not found in original document
-                # text = text.replace("\n", " ")
-                # text = re.sub(r"\s+", " ", text).strip()
+                text = text.replace("\n", " ")
+                text = re.sub(r"\s+", " ", text).strip()
                 indexed_sentences = extract_segments(text)
-                text = inject_indices_simple(indexed_sentences, page_num)
+                text = inject_indices(indexed_sentences, page_num)
                 all_text_file.write(text)
             else:
                 all_text_file.write(f"<PAGE {page_num}/>\n")
@@ -82,11 +82,6 @@ def extract_segments(text: str) -> list[str]:
         # Alphabetical items in parentheses (unchanged, as it suits the requirement)
         r"\([a-z]\)",
         # Adding a pattern for semicolons as a potential separator for items within the same sentence
-        r";",
-        # Example to match specific keywords that might indicate the start of a new clause or section.
-        # Adjust the keyword list based on your text's characteristics.
-        # This is a basic example and might need refinement.
-        r"\b(including|without limitation|such as|e.g.,)\b",
     ]
 
     segment_indices = []
@@ -122,51 +117,68 @@ def inject_indices_simple(indexed_sentences: list[str], page: int) -> str:
         # Append the sentence with its preceding index
         # Assuming <i> is the tag before the sentence and <i+1> is the tag after the sentence
         # For the last sentence, there's no next sentence, so just use <i>
-        combined_with_indices += f"<P{page}S{i}/>{sentence}"
+        combined_with_indices += f"<PAGE{page}SEGMENT{i}/>{sentence}\n"
 
     return combined_with_indices
 
 
-def merge_short_sentences(sentences: list[str]) -> list[str]:
-    """Merge sentences shorter than MIN_CHARS characters with the next one."""
+def normalize_sentence_lengths(
+    sentences: list[str], min_chars: int, max_chars: int
+) -> list[str]:
+    """
+    Adjust sentences to ensure each is within the specified minimum and maximum character lengths.
+    Sentences shorter than min_chars are merged with subsequent sentences, and sentences longer
+    than max_chars are split at suitable points.
+    """
+
+    processed_sentences = []
     i = 0
-    merged_sentences = []
+
+    # First pass: merge short sentences
     while i < len(sentences):
         current_sentence = sentences[i]
-        if len(current_sentence) < MIN_CHARS and i + 1 < len(sentences):
+        if len(current_sentence) < min_chars and i + 1 < len(sentences):
+            # Ensure not to exceed list bounds
             next_sentence = sentences[i + 1]
             merged_sentence = current_sentence + " " + next_sentence
-            merged_sentences.append(merged_sentence)
-            i += 2  # Skip the next sentence as it's already merged
+            # Check if the merged sentence still needs to be split (if it exceeds max_chars)
+            if len(merged_sentence) <= max_chars or max_chars == -1:
+                processed_sentences.append(merged_sentence)
+                i += 2  # Skip the next sentence as it's merged
+            else:
+                # If merging results in a sentence longer than max_chars, don't merge
+                processed_sentences.append(current_sentence)
+                i += 1  # Only increment by 1 to re-evaluate next_sentence in the next loop
         else:
-            merged_sentences.append(current_sentence)
+            processed_sentences.append(current_sentence)
             i += 1
-    return merged_sentences
 
-
-def split_long_sentences(sentences: list[str]) -> list[str]:
-    """Split sentences longer than MAX_CHARS characters at a comma or period."""
-    split_sentences = []
-    for sentence in sentences:
-        if len(sentence) > MAX_CHARS:
+    # Second pass: split long sentences
+    final_sentences = []
+    for sentence in processed_sentences:
+        if len(sentence) > max_chars and max_chars != -1:
             split_index = max(
-                sentence.rfind(",", 0, MAX_CHARS), sentence.rfind(".", 0, MAX_CHARS)
+                sentence.rfind(",", 0, max_chars), sentence.rfind(".", 0, max_chars)
             )
             if split_index != -1:
+                # Split the sentence at the last comma/period before max_chars
                 first_part = sentence[: split_index + 1]
                 second_part = sentence[split_index + 2 :].strip()
-                split_sentences.extend([first_part, second_part])
+                final_sentences.extend([first_part, second_part])
             else:
-                split_sentences.append(sentence)
+                # No suitable split point, append the sentence as is
+                final_sentences.append(sentence)
         else:
-            split_sentences.append(sentence)
-    return split_sentences
+            # Sentence is within the acceptable length range
+            final_sentences.append(sentence)
+
+    return final_sentences
 
 
-def inject_indices(indexed_sentences: list[str], page: int) -> str:
+def inject_indices(sentences: list[str], page: int) -> str:
     """Inject indices into sentences, merging short ones and splitting long ones."""
-    merged_sentences = merge_short_sentences(indexed_sentences)
-    final_sentences = split_long_sentences(merged_sentences)
+    final_sentences = normalize_sentence_lengths(sentences, MIN_CHARS, MAX_CHARS)
+    # final_sentences = sentences
 
     combined_with_indices = ""
     for index, sentence in enumerate(final_sentences, start=1):
