@@ -161,6 +161,73 @@ def process_file_and_prompt(txt_file: str, prompt_template: str):
     return responses
 
 
+def extract_string_between_tags(body: str, tag: str) -> str | None:
+    """
+    Extracts and returns the string content between the provided XML-style tag.
+
+    Parameters:
+    - body (str): The body of text from which to extract the content.
+    - tag (str): The tag name whose content is to be extracted.
+
+    Returns:
+    - str: The extracted string content between the opening and closing tags. If the tag is not found, returns None.
+    """
+    # Create a regular expression pattern to match the content between the specified tags
+    pattern = f"<{tag}>(.*?)</{tag}>"
+
+    # Search for the pattern in the body
+    match = re.search(pattern, body, re.DOTALL)
+
+    # If a match is found, return the first group (content between the tags); otherwise, return None
+    return match.group(1) if match else None
+
+
+def find_line_with_needle(body: str, needle: str) -> str | None:
+    """
+    Searches for a line in the given body that contains the specified needle.
+
+    Parameters:
+    - body (str): The string body to search through, where lines are separated by newlines.
+    - needle (str): The string to search for within the lines of the body.
+
+    Returns:
+    - str: The first line that contains the needle, or None if no such line is found.
+    """
+    # Split the body into lines
+    lines = body.split("\n")
+
+    # Iterate through each line and check if it contains the needle
+    for line in lines:
+        if needle in line:
+            return line  # Return the first line that contains the needle
+
+    return None  # Return None if the needle is not found in any line
+
+
+def replace_text_inside_tag(body: str, tag: str, replacement_str: str) -> str:
+    """
+    Replaces the body found between opening and closing XML-style tags with a provided replacement string.
+
+    Parameters:
+    - body (str): The original body containing the XML-style tags.
+    - tag (str): The tag name whose content is to be replaced.
+    - replacement_str (str): The string to insert between the opening and closing tags.
+
+    Returns:
+    - str: The modified body with the replacement string inserted between the specified tags.
+    """
+    # Define the pattern to match body between the specified tags (including multiline content)
+    pattern = f"<{tag}>(.*?)</{tag}>"
+
+    # Use re.sub() to replace the content between the tags with the replacement string
+    # The replacement also includes the opening and closing tags themselves
+    replaced_text = re.sub(
+        pattern, f"<{tag}>{replacement_str}</{tag}>", body, flags=re.DOTALL
+    )
+
+    return replaced_text
+
+
 def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
     """
     Prompt 2 needs to look up the citations column and for each citation string,
@@ -184,19 +251,29 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
         raise ValueError(
             f"Prompt file {template} does not contain {CITATIONS_PLACEHOLDER}"
         )
+    terminologies = extract_string_between_tags(template, "terminology")
+    if terminologies is None:
+        raise ValueError("No terminology found in the template")
+
     # Read documents_tags table
     query = "SELECT * FROM experiments.documents_tags WHERE document_id = 2"
     df_documents_tags = pd.read_sql_query(query, engine)
     unique_topics = responses["topic"].unique()
     prompts = []
     for topic in unique_topics:
+        topic_definition = find_line_with_needle(terminologies, topic)
+        if topic_definition is None:
+            raise ValueError(f"No definition found for {topic} in the template")
+        topic_prompt = replace_text_inside_tag(
+            template, "terminology", topic_definition
+        )
         filtered_df = responses[responses["topic"] == topic]
         dataframe_texts = (
             filtered_df[["citations", "summary"]]
             .apply(lambda x: f"{x['citations']} {x['summary']}", axis=1)
             .to_list()
         )
-        topic_prompt = template.replace(
+        topic_prompt = topic_prompt.replace(
             DATAFRAME_PLACEHOLDER, "\n".join(dataframe_texts)
         )
         print(f"Topic {topic}: {len(filtered_df)} rows")
@@ -223,11 +300,13 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
 
 def part2_chatgpt(index: int, prompt: str) -> str:
     try:
+        print(f"Sending question {index}...")
         response = openai.chat.completions.create(
             model="gpt-4-1106-preview",
             messages=[{"content": prompt, "role": "user"}],
         )
         content = response.choices[0].message.content
+        print(f"Processed question {index}")
         if content is None:
             print(f"No content error processing question {index}: {response}")
             return ""
