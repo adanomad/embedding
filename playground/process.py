@@ -62,9 +62,7 @@ def prepare_prompt(page_text: str, prompt_path: str, page_number: int) -> str:
     if TO_REPLACE not in prompt:
         raise ValueError(f"Prompt file {prompt_path} does not contain {TO_REPLACE}")
     gpt_input = prompt.replace(TO_REPLACE, page_text)
-    # Write the prompt to file
-    with open(f"{MODEL_NAME}.page{page_number + 1}.in.txt", "w") as file:
-        file.write(gpt_input)
+
     return gpt_input
 
 
@@ -146,7 +144,6 @@ def process_step_1_file_and_prompt(
                 continue
             input = prepare_prompt(page_data, prompt_template, page_num)
 
-            print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
             response, seconds = send_to_chatgpt(input, page_num + 1)
             promptios.append(
                 PromptIO(
@@ -182,7 +179,6 @@ def process_step_1_file_and_prompt(
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 promptios.append(result)
-                print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
 
     print(f"Processed {len(pages)} pages in {time.time() - t1} seconds")
     return promptios
@@ -393,23 +389,6 @@ def extract_json_data(promptio: PromptIO) -> dict:
     return data
 
 
-def promptios_handler(promptios: List[PromptIO], document_id: int, title: str):
-    # Write promptios to json file
-    PASS1RESULTS = "pass1.results.json"
-    with open(PASS1RESULTS, "w") as file:
-        json.dump([d.model_dump() for d in promptios], file)
-
-    print(f"Written pass 1 results to {PASS1RESULTS}")
-
-    """Read JSON data from a dumped json file."""
-    with open(PASS1RESULTS, "r") as file:
-        data = json.load(file)
-
-    data = pd.DataFrame(data)["prompt_out"].apply(json.loads)
-    data = pd.DataFrame(data.to_list())
-    return data
-
-
 def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
     prompts = create_collect_prompts(
         prompt_2,
@@ -445,6 +424,27 @@ def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
     return promptios
 
 
+def promptios_to_df(promptios: List[PromptIO]) -> pd.DataFrame:
+    """
+    Convert the list of PromptIO objects to a pandas DataFrame.
+    Columns: prompt_in, prompt_out, page, time_taken_seconds, model
+    """
+    return pd.DataFrame([obj.model_dump() for obj in promptios])
+
+
+def promptios_to_sql(promptios: List[PromptIO], document_id: int, step: int):
+    """
+    Write the list of PromptIO objects to the database table experiments.promptios
+    For metrics and logging purposes, we also calculate the length of the input and output prompts.
+    """
+    pdf = promptios_to_df(promptios)
+    pdf["document_id"] = document_id
+    pdf["step"] = step
+    pdf["length_out"] = pdf["prompt_out"].apply(len)
+    pdf["length_in"] = pdf["prompt_in"].apply(len)
+    pdf.to_sql("promptios", engine, if_exists="append", schema="experiments")
+
+
 def tagged_text_process(
     txtfile: str,
     prompt_1: str,
@@ -459,14 +459,9 @@ def tagged_text_process(
     print(f"Processing file {txtfile} with document_id {document_id}")
 
     promptios_1 = process_step_1_file_and_prompt(txtfile, prompt_1, limit=3, fast=True)
-    print(f"Processed {len(promptios_1)} pages")
+    promptios_to_sql(promptios_1, document_id, 1)
 
-    df_pass2_src = promptios_handler(
-        promptios_1,
-        document_id,
-        "Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pass1.promptios.json",
-    )
-    print(f"Read {len(df_pass2_src)} rows")
+    df_pass2_src = pd.DataFrame(map(lambda p: json.loads(p.prompt_out), promptios_1))
     topic_columns = df_pass2_src.columns.tolist()
     print(f"Topic columns: {topic_columns}")
     to_sql_table = filter_data_for_sql(df_pass2_src)
@@ -480,15 +475,17 @@ def tagged_text_process(
     print(f"Written {len(to_sql_table)} records to experiments.pass1_results")
 
     promptios_2 = process_step_2(prompt_2, to_sql_table)
+    promptios_to_sql(promptios_2, document_id, 2)
 
     responses = list(map(extract_json_data, promptios_2))
     df_pass2_output = pd.DataFrame(responses)
-    df_pass2_output.to_csv("pass2.result.csv", index=False)
     df_pass2_output["document_id"] = document_id
     df_pass2_output.to_sql(
         "pass2_results", engine, if_exists="append", schema="experiments"
     )
     print(f"Written {len(df_pass2_output)} records to experiments.pass2_results")
+    df_pass2_output.to_csv("pass2.result.csv")
+    print("Written pass 2 results to pass2.result.csv")
 
 
 if __name__ == "__main__":
