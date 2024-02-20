@@ -449,6 +449,7 @@ def tagged_text_process(
     txtfile: str,
     prompt_1: str,
     prompt_2: str,
+    limit: int | None = None,
 ):
     """
     Process the file and prompts to generate the pass 2 prompts and responses.
@@ -458,7 +459,9 @@ def tagged_text_process(
     document_id = get_new_doc_id(txtfile)
     print(f"Processing file {txtfile} with document_id {document_id}")
 
-    promptios_1 = process_step_1_file_and_prompt(txtfile, prompt_1, limit=3, fast=True)
+    promptios_1 = process_step_1_file_and_prompt(
+        txtfile, prompt_1, limit=limit, fast=True
+    )
     promptios_to_sql(promptios_1, document_id, 1)
 
     df_pass2_src = pd.DataFrame(map(lambda p: json.loads(p.prompt_out), promptios_1))
@@ -469,6 +472,7 @@ def tagged_text_process(
     print("Step 2")
     # Write to the database table experiments.pass1_results
     to_sql_table["document_id"] = document_id
+    to_sql_table["model"] = MODEL_NAME
     to_sql_table.to_sql(
         "pass1_results", engine, if_exists="append", schema="experiments"
     )
@@ -480,6 +484,7 @@ def tagged_text_process(
     responses = list(map(extract_json_data, promptios_2))
     df_pass2_output = pd.DataFrame(responses)
     df_pass2_output["document_id"] = document_id
+    df_pass2_output["model"] = MODEL_NAME
     df_pass2_output.to_sql(
         "pass2_results", engine, if_exists="append", schema="experiments"
     )
@@ -493,9 +498,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--txtfile",
         type=str,
-        default="../data/m&a/arco/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf.txt",
+        # default="../data/m&a/arco/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf.txt",
+        default="../data/m&a/lumen/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf.txt",
     )
+    parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
     tagged_text_process(
-        args.txtfile, "credit.pass1.prompt.txt", "credit.pass2.prompt.txt"
+        args.txtfile, "credit.pass1.prompt.txt", "credit.pass2.prompt.txt", args.limit
     )
