@@ -29,8 +29,8 @@ Your response should be a json, with exact keys this json example:
 {
     "field_name": "closing_conditions",
     "value": "Short answer here",
-    "citations": ["<P4S1/>", "<P4S5/>"]
-    "explanation": "Insert detailed explanation"
+    "citations": ["<P4S1/>", "<P4S5/>"],
+    "explanation": "Explanation but do not use citation tags. No references to <P4S1/> and such."
 }
 <example_response/>
 

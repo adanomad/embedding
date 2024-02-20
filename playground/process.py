@@ -9,12 +9,13 @@ from openai import OpenAI
 import json
 import csv
 import pandas as pd
-from typing import Optional
 from pydantic import BaseModel
-from typing import List, Dict, Tuple
-from sqlalchemy import create_engine, text
+from typing import List, Dict
+from sqlalchemy import create_engine
 import ast
 from more_itertools import flatten
+
+from df_psql import get_new_doc_id
 
 # MODEL_NAME = "gpt-4-1106-preview"
 MODEL_NAME = "gpt-3.5-turbo"
@@ -120,11 +121,16 @@ class PromptIO(BaseModel):
     prompt_out: str
     page: int
     time_taken_seconds: float
-    model_type: str
+    model: str
 
 
 # Main function to process the file and prompt
-def process_file_and_prompt(txt_file: str, prompt_template: str) -> List[PromptIO]:
+def process_step_1_file_and_prompt(
+    txt_file: str,
+    prompt_template: str,
+    limit: int | None,
+    fast: bool = True,
+) -> List[PromptIO]:
     t0 = time.time()
     promptios: list[PromptIO] = []
     pages = read_and_split_file(txt_file)
@@ -133,51 +139,50 @@ def process_file_and_prompt(txt_file: str, prompt_template: str) -> List[PromptI
     )
     t1 = time.time()
 
-    # Note PAGE_LIMIT is for testing purposes, so we don't have to wait for all pages to process before checking the results
-    PAGE_LIMIT = 4
-    for page_num, page_data in enumerate(pages[:PAGE_LIMIT]):
-        print(f"Processing page {pages.index(page_data) + 1} of {len(pages)}")
-        if page_data == "":
-            continue
-        input = prepare_prompt(page_data, prompt_template, page_num)
+    if not fast:
+        for page_num, page_data in enumerate(pages[:limit]):
+            print(f"Processing page {pages.index(page_data) + 1} of {len(pages)}")
+            if page_data == "":
+                continue
+            input = prepare_prompt(page_data, prompt_template, page_num)
 
-        print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
-        response, seconds = send_to_chatgpt(input, page_num + 1)
-        promptios.append(
-            PromptIO(
-                prompt_in=input,
-                prompt_out=json.dumps(response, indent=2),
-                page=page_num,
-                time_taken_seconds=seconds,
-                model_type=MODEL_NAME,
+            print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
+            response, seconds = send_to_chatgpt(input, page_num + 1)
+            promptios.append(
+                PromptIO(
+                    prompt_in=input,
+                    prompt_out=json.dumps(response, indent=2),
+                    page=page_num,
+                    time_taken_seconds=seconds,
+                    model=MODEL_NAME,
+                )
             )
-        )
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = []
+            for page_num, page_data in enumerate(pages[:limit]):
+                print(f"Processing page {page_num + 1} of {len(pages)}")
+                if page_data == "":
+                    continue
 
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-    #     futures = []
-    #     for page_num, page_data in enumerate(pages):
-    #         print(f"Processing page {page_num + 1} of {len(pages)}")
-    #         if page_data == "":
-    #             continue
+                # Use a task function to encapsulate the call with context
+                def task(p_num=page_num, p_data=page_data) -> PromptIO:
+                    input = prepare_prompt(p_data, prompt_template, p_num)
+                    response, seconds = send_to_chatgpt(input, p_num + 1)
+                    return PromptIO(
+                        prompt_in=input,
+                        prompt_out=json.dumps(response, indent=2),
+                        page=p_num,
+                        time_taken_seconds=seconds,
+                        model=MODEL_NAME,
+                    )
 
-    #         # Use a task function to encapsulate the call with context
-    #         def task(p_num=page_num, p_data=page_data) -> PromptIO:
-    #             input = prepare_prompt(p_data, prompt_template, p_num)
-    #             response, seconds = send_to_chatgpt(input, p_num + 1)
-    #             return PromptIO(
-    #                 prompt_in=input,
-    #                 prompt_out=json.dumps(response, indent=2),
-    #                 page=p_num,
-    #                 time_taken_seconds=seconds,
-    #                 model_type=MODEL_NAME,
-    #             )
+                futures.append(executor.submit(task))
 
-    #         futures.append(executor.submit(task))
-
-    #     for future in concurrent.futures.as_completed(futures):
-    #         result = future.result()
-    #         promptios.append(result)
-    #         print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                promptios.append(result)
+                print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
 
     print(f"Processed {len(pages)} pages in {time.time() - t1} seconds")
     return promptios
@@ -323,23 +328,25 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
     return prompts
 
 
-def part2_chatgpt(index: int, prompt: str) -> str:
+def part2_chatgpt(index: int, prompt: str) -> tuple[str, float]:
     try:
         print(f"Sending question {index}...")
+        t0 = time.time()
         response = openai.chat.completions.create(
-            model="gpt-4-1106-preview",
+            model=MODEL_NAME,
             messages=[{"content": prompt, "role": "user"}],
         )
         content = response.choices[0].message.content
-        print(f"Processed question {index}")
+        seconds = time.time() - t0
+        print(f"Processed question {index} in {seconds:.2f} seconds")
         if content is None:
             print(f"No content error processing question {index}: {response}")
-            return ""
-        return content
+            return "", seconds
+        return content, seconds
 
     except openai.OpenAIError as e:
         # Handle any errors from the OpenAI API
-        return f"Error processing question {index}: {str(e)}"
+        return f"Error processing question {index}: {str(e)}", 0.0
 
 
 def read_and_clean_data(file_path):
@@ -374,7 +381,8 @@ def filter_data_for_sql(df) -> pd.DataFrame:
     return pd.DataFrame(to_sql_table)
 
 
-def extract_json_data(file_content: str) -> dict:
+def extract_json_data(promptio: PromptIO) -> dict:
+    file_content = promptio.prompt_out
     # Check and remove first and last line as they contain ```json and ```, respectively
     if file_content.splitlines()[0] == "```json":
         joined = "".join(file_content.splitlines()[1:-1])
@@ -383,6 +391,58 @@ def extract_json_data(file_content: str) -> dict:
         data = json.loads(file_content)
 
     return data
+
+
+def promptios_handler(promptios: List[PromptIO], document_id: int, title: str):
+    # Write promptios to json file
+    PASS1RESULTS = "pass1.results.json"
+    with open(PASS1RESULTS, "w") as file:
+        json.dump([d.model_dump() for d in promptios], file)
+
+    print(f"Written pass 1 results to {PASS1RESULTS}")
+
+    """Read JSON data from a dumped json file."""
+    with open(PASS1RESULTS, "r") as file:
+        data = json.load(file)
+
+    data = pd.DataFrame(data)["prompt_out"].apply(json.loads)
+    data = pd.DataFrame(data.to_list())
+    return data
+
+
+def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
+    prompts = create_collect_prompts(
+        prompt_2,
+        to_sql_table,
+    )
+    print(f"Created {len(prompts)} topic prompts for pass 2.")
+    promptios: List[PromptIO] = []
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = []
+        for prompt_num, prompt_input in enumerate(prompts):
+            if prompt_input == "":
+                continue
+
+            # Use a task function to encapsulate the call with context
+            def task(p_num=prompt_num, p_data=prompt_input) -> PromptIO:
+                response, seconds = part2_chatgpt(p_num + 1, p_data)
+                return PromptIO(
+                    prompt_in=prompt_input,
+                    prompt_out=response,
+                    page=p_num,
+                    time_taken_seconds=seconds,
+                    model=MODEL_NAME,
+                )
+
+            futures.append(executor.submit(task))
+
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            promptios.append(result)
+
+    print(f"Processed {len(promptios)} pages in {(time.time() - t0):.2f} seconds")
+    return promptios
 
 
 def tagged_text_process(
@@ -394,56 +454,41 @@ def tagged_text_process(
     Process the file and prompts to generate the pass 2 prompts and responses.
 
     """
-    # print("Step 1")
-    PASS1RESULTS = "pass1.results.json"
+    print("Step 1")
+    document_id = get_new_doc_id(txtfile)
+    print(f"Processing file {txtfile} with document_id {document_id}")
 
-    # data = process_file_and_prompt(txtfile, prompt_1)
-    # print(f"Processed {len(data)} pages")
-    # # Write data to json file
-    # with open(PASS1RESULTS, "w") as file:
-    #     json.dump([d.model_dump() for d in data], file)
-    # print(f"Written pass 1 results to {PASS1RESULTS}")
+    promptios_1 = process_step_1_file_and_prompt(txtfile, prompt_1, limit=3, fast=True)
+    print(f"Processed {len(promptios_1)} pages")
 
-    # # Read it back
-    print("Step 2")
-    df_pass2_src = read_and_clean_data(PASS1RESULTS)
-    print(f"Read {len(df_pass2_src)} rows from {PASS1RESULTS}")
+    df_pass2_src = promptios_handler(
+        promptios_1,
+        document_id,
+        "Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pass1.promptios.json",
+    )
+    print(f"Read {len(df_pass2_src)} rows")
     topic_columns = df_pass2_src.columns.tolist()
     print(f"Topic columns: {topic_columns}")
     to_sql_table = filter_data_for_sql(df_pass2_src)
-    # # Write to a file
-    pd.DataFrame(to_sql_table).to_csv("pass2.csv", index=False)
-    prompts = create_collect_prompts(
-        prompt_2,
-        to_sql_table,
-    )
-    print(f"Created {len(prompts)} prompts")
-    # Write prompts to file
-    for idx, prompt in enumerate(prompts):
-        with open(f"pass2.{idx + 1}.prompt.in.txt", "w") as file:
-            file.write(prompt)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = []
-        for idx, prompt in enumerate(prompts):
-            futures.append(executor.submit(part2_chatgpt, idx, prompt))
-        responses = [
-            future.result() for future in concurrent.futures.as_completed(futures)
-        ]
-    # Write responses to file
-    for idx, response in enumerate(responses):
-        with open(f"pass2.{idx + 1}.prompt.out.txt", "w") as file:
-            file.write(response)
-    print(f"Written {len(responses)} responses to pass2.*.prompt.out.txt")
-    # Map extract_json_data to responses
-    responses = list(map(extract_json_data, responses))
+    print("Step 2")
+    # Write to the database table experiments.pass1_results
+    to_sql_table["document_id"] = document_id
+    to_sql_table.to_sql(
+        "pass1_results", engine, if_exists="append", schema="experiments"
+    )
+    print(f"Written {len(to_sql_table)} records to experiments.pass1_results")
+
+    promptios_2 = process_step_2(prompt_2, to_sql_table)
+
+    responses = list(map(extract_json_data, promptios_2))
     df_pass2_output = pd.DataFrame(responses)
     df_pass2_output.to_csv("pass2.result.csv", index=False)
-    df_pass2_output["document_id"] = 1  # todo: get the id from the database
+    df_pass2_output["document_id"] = document_id
     df_pass2_output.to_sql(
         "pass2_results", engine, if_exists="append", schema="experiments"
     )
-    print(f"CSV file saved with {len(df_pass2_output)} records.")
+    print(f"Written {len(df_pass2_output)} records to experiments.pass2_results")
 
 
 if __name__ == "__main__":
@@ -454,7 +499,6 @@ if __name__ == "__main__":
         default="../data/m&a/arco/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf.txt",
     )
     args = parser.parse_args()
-
     tagged_text_process(
         args.txtfile, "credit.pass1.prompt.txt", "credit.pass2.prompt.txt"
     )
