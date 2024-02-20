@@ -11,7 +11,7 @@ import csv
 import pandas as pd
 from typing import Optional
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from sqlalchemy import create_engine, text
 import ast
 from more_itertools import flatten
@@ -32,6 +32,11 @@ openai_client = OpenAI(api_key=api_key)
 
 
 def read_and_split_file(file_path: str) -> List[str]:
+    """
+    Read the file and split the text into pages of MAX_TEXT_LENGTH.
+    A page is defined as a string of text with a maximum length of MAX_TEXT_LENGTH.
+    It does not mean a page in the traditional book sense.
+    """
     pages = []
     with open(file_path, "r") as file:
         current_page = ""
@@ -62,7 +67,7 @@ def prepare_prompt(page_text: str, prompt_path: str, page_number: int) -> str:
     return gpt_input
 
 
-def send_to_chatgpt(input: str, page_number: int) -> dict:
+def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
     print(f"Sending to {MODEL_NAME} for page {page_number}...")
     start = time.time()
     response = openai.chat.completions.create(
@@ -75,27 +80,9 @@ def send_to_chatgpt(input: str, page_number: int) -> dict:
         print(f"No content error processing page: {input}")
         raise Exception(f"No content error processing page {page_number}")
     json_response = json.loads(content)
-    print(f"Processed page {page_number} in {time.time() - start:.2f} seconds")
-
-    # Write the response to file
-    with open(f"page{page_number + 1}.{MODEL_NAME}.out.json", "w") as file:
-        file.write(json.dumps(json_response, indent=2))
-    print(f"Written response to page{page_number + 1}.prompt.out.txt")
-    # Metrics (input length, response length, time taken, model used, page number)
-    print(
-        f"Metrics: Input length: {len(input)}, Response length: {len(content)}, Time taken: {time.time() - start:.2f} seconds, Model: {MODEL_NAME}, Page number: {page_number + 1}"
-    )
-    collect_metrics_to_csv(
-        {
-            "input_length": len(input),
-            "response_length": len(content),
-            "time_taken": time.time() - start,
-            "model": MODEL_NAME,
-            "page_number": page_number + 1,
-        },
-        "metrics.csv",
-    )
-    return json_response
+    end_time = time.time() - start
+    print(f"Processed page {page_number} in {end_time} seconds")
+    return (json_response, end_time)
 
 
 def collect_metrics_to_csv(metric: Dict[str, str | int | float], csv_file: str):
@@ -124,41 +111,76 @@ def collect_metrics_to_csv(metric: Dict[str, str | int | float], csv_file: str):
         )
 
 
+class PromptIO(BaseModel):
+    """
+    A class to represent the input and output prompt files.
+    """
+
+    prompt_in: str
+    prompt_out: str
+    page: int
+    time_taken_seconds: float
+    model_type: str
+
+
 # Main function to process the file and prompt
-def process_file_and_prompt(txt_file: str, prompt_template: str):
+def process_file_and_prompt(txt_file: str, prompt_template: str) -> List[PromptIO]:
     t0 = time.time()
-    responses = []
+    promptios: list[PromptIO] = []
     pages = read_and_split_file(txt_file)
     print(
         f"Read {len(pages)} pages from {txt_file} in {(time.time() - t0):.2f} seconds"
     )
     t1 = time.time()
 
-    # # Note PAGE_LIMIT is for testing purposes, so we don't have to wait for all pages to process before checking the results
-    # PAGE_LIMIT = 4
-    # for idx, page in enumerate(pages[:PAGE_LIMIT]):
-    #     print(f"Processing page {pages.index(page) + 1} of {len(pages)}")
-    #     if page == "":
-    #         continue
-    #     input = prepare_prompt(page, prompt_template, idx)
+    # Note PAGE_LIMIT is for testing purposes, so we don't have to wait for all pages to process before checking the results
+    PAGE_LIMIT = 4
+    for page_num, page_data in enumerate(pages[:PAGE_LIMIT]):
+        print(f"Processing page {pages.index(page_data) + 1} of {len(pages)}")
+        if page_data == "":
+            continue
+        input = prepare_prompt(page_data, prompt_template, page_num)
 
-    #     print(f"Written prompt to page{idx + 1}.prompt.in.txt")
-    #     response = send_to_chatgpt(input, idx + 1)
-    #     responses.append(response)
+        print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
+        response, seconds = send_to_chatgpt(input, page_num + 1)
+        promptios.append(
+            PromptIO(
+                prompt_in=input,
+                prompt_out=json.dumps(response, indent=2),
+                page=page_num,
+                time_taken_seconds=seconds,
+                model_type=MODEL_NAME,
+            )
+        )
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = []
-        for idx, page in enumerate(pages):
-            if page == "":
-                continue
-            input = prepare_prompt(page, prompt_template, idx)
-            futures.append(executor.submit(send_to_chatgpt, input, idx + 1))
-        for future in concurrent.futures.as_completed(futures):
-            response = future.result()
-            responses.append(response)
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    #     futures = []
+    #     for page_num, page_data in enumerate(pages):
+    #         print(f"Processing page {page_num + 1} of {len(pages)}")
+    #         if page_data == "":
+    #             continue
+
+    #         # Use a task function to encapsulate the call with context
+    #         def task(p_num=page_num, p_data=page_data) -> PromptIO:
+    #             input = prepare_prompt(p_data, prompt_template, p_num)
+    #             response, seconds = send_to_chatgpt(input, p_num + 1)
+    #             return PromptIO(
+    #                 prompt_in=input,
+    #                 prompt_out=json.dumps(response, indent=2),
+    #                 page=p_num,
+    #                 time_taken_seconds=seconds,
+    #                 model_type=MODEL_NAME,
+    #             )
+
+    #         futures.append(executor.submit(task))
+
+    #     for future in concurrent.futures.as_completed(futures):
+    #         result = future.result()
+    #         promptios.append(result)
+    #         print(f"Written prompt to page{page_num + 1}.prompt.in.txt")
 
     print(f"Processed {len(pages)} pages in {time.time() - t1} seconds")
-    return responses
+    return promptios
 
 
 def extract_string_between_tags(body: str, tag: str) -> str | None:
@@ -321,18 +343,13 @@ def part2_chatgpt(index: int, prompt: str) -> str:
 
 
 def read_and_clean_data(file_path):
-    """Read JSON data from a file and remove specified columns."""
+    """Read JSON data from a dumped json file."""
     with open(file_path, "r") as file:
         data = json.load(file)
-    cleaned_data = [
-        {
-            k: v
-            for k, v in page.items()
-            if k not in ["page_number", "summary", "original_page_text", "embedding"]
-        }
-        for page in data
-    ]
-    return pd.DataFrame(cleaned_data)
+        data = pd.DataFrame(data)["prompt_out"].apply(json.loads)
+        data = pd.DataFrame(data.to_list())
+
+    return data
 
 
 def filter_data_for_sql(df) -> pd.DataFrame:
@@ -357,7 +374,18 @@ def filter_data_for_sql(df) -> pd.DataFrame:
     return pd.DataFrame(to_sql_table)
 
 
-def process(
+def extract_json_data(file_content: str) -> dict:
+    # Check and remove first and last line as they contain ```json and ```, respectively
+    if file_content.splitlines()[0] == "```json":
+        joined = "".join(file_content.splitlines()[1:-1])
+        data = json.loads(joined)
+    else:
+        data = json.loads(file_content)
+
+    return data
+
+
+def tagged_text_process(
     txtfile: str,
     prompt_1: str,
     prompt_2: str,
@@ -369,20 +397,20 @@ def process(
     # print("Step 1")
     PASS1RESULTS = "pass1.results.json"
 
-    data = process_file_and_prompt(txtfile, prompt_1)
-    print(f"Processed {len(data)} pages")
-    # Write data to json file
-    with open(PASS1RESULTS, "w") as file:
-        json.dump(data, file)
-    print(f"Written pass 1 results to {PASS1RESULTS}")
+    # data = process_file_and_prompt(txtfile, prompt_1)
+    # print(f"Processed {len(data)} pages")
+    # # Write data to json file
+    # with open(PASS1RESULTS, "w") as file:
+    #     json.dump([d.model_dump() for d in data], file)
+    # print(f"Written pass 1 results to {PASS1RESULTS}")
 
     # # Read it back
     print("Step 2")
-    df = read_and_clean_data(PASS1RESULTS)
-    print(f"Read {len(df)} rows from {PASS1RESULTS}")
-    topic_columns = df.columns.tolist()
+    df_pass2_src = read_and_clean_data(PASS1RESULTS)
+    print(f"Read {len(df_pass2_src)} rows from {PASS1RESULTS}")
+    topic_columns = df_pass2_src.columns.tolist()
     print(f"Topic columns: {topic_columns}")
-    to_sql_table = filter_data_for_sql(df)
+    to_sql_table = filter_data_for_sql(df_pass2_src)
     # # Write to a file
     pd.DataFrame(to_sql_table).to_csv("pass2.csv", index=False)
     prompts = create_collect_prompts(
@@ -407,6 +435,15 @@ def process(
         with open(f"pass2.{idx + 1}.prompt.out.txt", "w") as file:
             file.write(response)
     print(f"Written {len(responses)} responses to pass2.*.prompt.out.txt")
+    # Map extract_json_data to responses
+    responses = list(map(extract_json_data, responses))
+    df_pass2_output = pd.DataFrame(responses)
+    df_pass2_output.to_csv("pass2.result.csv", index=False)
+    df_pass2_output["document_id"] = 1  # todo: get the id from the database
+    df_pass2_output.to_sql(
+        "pass2_results", engine, if_exists="append", schema="experiments"
+    )
+    print(f"CSV file saved with {len(df_pass2_output)} records.")
 
 
 if __name__ == "__main__":
@@ -416,8 +453,8 @@ if __name__ == "__main__":
         type=str,
         default="../data/m&a/arco/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf.txt",
     )
-    parser.add_argument("--prompt_1", type=str, default="credit.pass1.prompt.txt")
-    parser.add_argument("--prompt_2", type=str, default="credit.pass2.prompt.txt")
     args = parser.parse_args()
 
-    process(args.txtfile, args.prompt_1, args.prompt_2)
+    tagged_text_process(
+        args.txtfile, "credit.pass1.prompt.txt", "credit.pass2.prompt.txt"
+    )

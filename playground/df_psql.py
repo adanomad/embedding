@@ -179,6 +179,17 @@ def insert_pass1_results(id: int):
     df.to_sql("pass1_results", engine, if_exists="append", schema="experiments")
 
 
+def extract_json_data(file_content: str) -> dict:
+    # Check and remove first and last line as they contain ```json and ```, respectively
+    if file_content.splitlines()[0] == "```json":
+        joined = "".join(file_content.splitlines()[1:-1])
+        data = json.loads(joined)
+    else:
+        data = json.loads(file_content)
+
+    return data
+
+
 def insert_pass2_results(id: int):
     # Pattern to match the files
     file_pattern = "pass2.*.prompt.out.txt"
@@ -189,15 +200,8 @@ def insert_pass2_results(id: int):
     # Find and read each file
     for file_path in glob.glob(file_pattern):
         with open(file_path, "r") as file:
-
             file_content = file.read()
-            # Check and remove first and last line as they contain ```json and ```, respectively
-            if file_content.splitlines()[0] == "```json":
-                joined = "".join(file_content.splitlines()[1:-1])
-                data = json.loads(joined)
-            else:
-                data = json.loads(file_content)
-
+            data = extract_json_data(file_content)
             data_list.append(data)
 
     # Convert the list of dictionaries into a DataFrame
