@@ -17,8 +17,8 @@ from more_itertools import flatten
 import fitz  # PyMuPDF
 from df_psql import get_new_doc_id
 
-# MODEL_NAME = "gpt-4-1106-preview"
-MODEL_NAME = "gpt-3.5-turbo"
+MODEL_NAME = "gpt-4-1106-preview"
+# MODEL_NAME = "gpt-3.5-turbo"
 MAX_TEXT_LENGTH = 4096 * 4  # 16KB
 MIN_CHARS = 120  # Minimum characters for a sentence
 MAX_CHARS = 360  # Maximum characters for a sentence
@@ -35,13 +35,11 @@ openai_client = OpenAI(api_key=api_key)
 
 
 def pdf2text_inject_tags(pdf_path, inject_tokens=True) -> str:
-
-    # Open the PDF file
     all_text_file = ""
     with fitz.open(pdf_path) as doc:
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
-
+            print(f"Processing page {page_num}...")
             text = page.get_text()
             if inject_tokens:
                 # This could cause string find issues if the text is not found in original document
@@ -52,13 +50,12 @@ def pdf2text_inject_tags(pdf_path, inject_tokens=True) -> str:
                 all_text_file += text
             else:
                 all_text_file += f"<PAGE {page_num}/>\n"
-
-    print(f"Text and images extracted from {pdf_path}")
+                all_text_file += text
+    print(f"Text extracted from {pdf_path}")
     return all_text_file
 
 
 def extract_segments(text: str) -> list[str]:
-    # Define patterns for identifying key segments; these can be adjusted or expanded based on the document's structure
     patterns = [
         # Match Roman numerals in parentheses. This pattern is simplified and might not cover all edge cases.
         r"\((?=[MDCLXVI])(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))\)",
@@ -161,30 +158,32 @@ def normalize_sentence_lengths(
 def inject_indices(sentences: list[str], page: int) -> str:
     """Inject indices into sentences, merging short ones and splitting long ones."""
     final_sentences = normalize_sentence_lengths(sentences, MIN_CHARS, MAX_CHARS)
-    # final_sentences = sentences
 
     combined_with_indices = ""
-    for index, sentence in enumerate(final_sentences, start=1):
+    for index, sentence in enumerate(final_sentences):
         combined_with_indices += f"<P{page}S{index}/>{sentence}\n"
 
     return combined_with_indices.strip()
 
 
-def read_and_split_file(document_id: str) -> List[str]:
+def read_and_split_file(document_id: int) -> List[str]:
     """
     Read the file and split the text into pages of MAX_TEXT_LENGTH.
     A page is defined as a string of text with a maximum length of MAX_TEXT_LENGTH.
     It does not mean a page in the traditional book sense.
     """
     pages = []
-    df_tag_paragraph = get_document_tags(document_id)
+    df_tag_paragraph = get_document_tags_paragraphs(document_id)
     current_page = ""
     for tag, paragraph in df_tag_paragraph.itertuples(index=False):
+        print(f"Processing tag: {tag}, paragraph length: {len(paragraph)}")
         if len(paragraph) + len(current_page) > MAX_TEXT_LENGTH:
+            print(f"Starting new page: {len(pages)}")
             pages.append(current_page)
             current_page = tag + " " + paragraph
         else:
-            current_page += " " + (tag if tag else "" + " " + paragraph)
+            print(f"Added to page {len(pages)}")
+            current_page += " " + (tag if tag else "") + " " + paragraph
     # Don't forget to add the last page if it's not empty
     if current_page:
         pages.append(current_page)
@@ -263,7 +262,7 @@ class PromptIO(BaseModel):
 
 # Main function to process the file and prompt
 def process_step_1_file_and_prompt(
-    document_id: str,
+    document_id: int,
     prompt_template: str,
     limit: int | None,
     fast: bool = True,
@@ -272,7 +271,7 @@ def process_step_1_file_and_prompt(
     promptios: list[PromptIO] = []
     pages = read_and_split_file(document_id)
     print(
-        f"Read {len(pages)} pages from {document_id} in {(time.time() - t0):.2f} seconds"
+        f"Read {len(pages)} pages from document_id {document_id} in {(time.time() - t0):.2f} seconds"
     )
     t1 = time.time()
 
@@ -418,7 +417,10 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
         raise ValueError("No terminology found in the template")
 
     # Read documents_tags table
-    query = "SELECT * FROM experiments.documents_tags WHERE document_id = 2"
+    document_id = responses["document_id"].iloc[0]
+    query = (
+        f"SELECT * FROM experiments.documents_tags WHERE document_id = '{document_id}'"
+    )
     df_documents_tags = pd.read_sql_query(query, engine)
     unique_topics = responses["topic"].unique()
     prompts = []
@@ -455,8 +457,10 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
         combined_strings = filtered_df_documents_tags.apply(
             lambda x: f"{x['tag']} {x['paragraph']}", axis=1
         ).tolist()
-        combined_string = "\n".join(combined_strings)
-        topic_prompt = topic_prompt.replace(CITATIONS_PLACEHOLDER, combined_string)
+        combined_citations_string = "\n".join(combined_strings)
+        topic_prompt = topic_prompt.replace(
+            CITATIONS_PLACEHOLDER, combined_citations_string
+        )
 
         prompts.append(topic_prompt)
 
@@ -571,7 +575,7 @@ def promptios_to_df(promptios: List[PromptIO]) -> pd.DataFrame:
     return pd.DataFrame([obj.model_dump() for obj in promptios])
 
 
-def promptios_to_sql(promptios: List[PromptIO], document_id: str, step: int):
+def promptios_to_sql(promptios: List[PromptIO], document_id: int, step: int):
     """
     Write the list of PromptIO objects to the database table experiments.promptios
     For metrics and logging purposes, we also calculate the length of the input and output prompts.
@@ -584,8 +588,8 @@ def promptios_to_sql(promptios: List[PromptIO], document_id: str, step: int):
     pdf.to_sql("promptios", engine, if_exists="append", schema="experiments")
 
 
-def get_document_tags(document_id: str) -> pd.DataFrame:
-    query = f"SELECT tag, paragraph FROM experiments.documents_tags WHERE document_id = {document_id}"
+def get_document_tags_paragraphs(document_id: int) -> pd.DataFrame:
+    query = f"SELECT tag, paragraph FROM experiments.documents_tags WHERE document_id = '{document_id}'"
     return pd.read_sql_query(query, engine)
 
 
@@ -594,7 +598,8 @@ def get_prompt_from_sql(prompt_name: str) -> str:
         f"SELECT content FROM experiments.prompts WHERE prompt_name = '{prompt_name}'"
     )
     with engine.connect() as conn:
-        return conn.execute(text(query)).scalar()
+        result = conn.execute(text(query))
+        return result.scalar()  # type: ignore
 
 
 def write_prompt_file_to_sql(prompt_name: str):
@@ -604,7 +609,7 @@ def write_prompt_file_to_sql(prompt_name: str):
 
 
 def tagged_text_process(
-    document_id: str,
+    document_id: int,
     prompt_name_1: str,
     prompt_name_2: str,
     limit: int | None = None,
@@ -648,7 +653,7 @@ def tagged_text_process(
     print("Written pass 2 results to pass2.result.csv")
 
 
-def write_document_tags_to_sql(filename: str, document_content: str) -> str:
+def write_document_tags_to_sql(filename: str, document_content: str) -> int:
     document_id = get_new_doc_id(filename)
     print(f"Writing document tags to SQL for document_id {document_id}")
     # split document_content into sentences using regex looking for tag structure of <P\d+S\d+/>
@@ -667,7 +672,7 @@ def write_document_tags_to_sql(filename: str, document_content: str) -> str:
     df.to_sql(
         "documents_tags", engine, index=False, if_exists="append", schema="experiments"
     )
-    return document_id
+    return int(document_id)
 
 
 def read_prompt_from_sql(prompt_name: str) -> pd.DataFrame:
@@ -678,21 +683,21 @@ def read_prompt_from_sql(prompt_name: str) -> pd.DataFrame:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--txtfile",
+        "--pdf",
         type=str,
-        # default="../data/m&a/arco/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf.txt",
-        default="../data/m&a/lumen/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf.txt",
+        default="../data/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf",
+        # default="../data/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf",
     )
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
     # Write the prompt to sql if not exist (temp here)
-    # write_prompt_file_to_sql("credit.pass1.prompt.txt")
-    # write_prompt_file_to_sql("credit.pass2.prompt.txt")
+    write_prompt_file_to_sql("credit.pass1.prompt.txt")
+    write_prompt_file_to_sql("credit.pass2.prompt.txt")
 
     # Extract the document text and inject tags
-    document_text_with_tags = pdf2text_inject_tags(args.txtfile)
-    filename = os.path.basename(args.txtfile)
+    document_text_with_tags = pdf2text_inject_tags(args.pdf)
+    filename = os.path.basename(args.pdf)
     document_id = write_document_tags_to_sql(filename, document_text_with_tags)
     print(f"Document ID: {document_id}")
 
