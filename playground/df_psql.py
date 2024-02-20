@@ -170,15 +170,13 @@ def init_schema(schema_name="experiments"):
 def insert_metrics(id: int):
     df = pd.read_csv("metrics.csv")
     df["document_id"] = id
-    df.to_sql("metrics", engine, index=False, if_exists="append", schema="experiments")
+    df.to_sql("metrics", engine, if_exists="append", schema="experiments")
 
 
 def insert_pass1_results(id: int):
     df = pd.read_csv("pass2.csv")
     df["document_id"] = id
-    df.to_sql(
-        "pass1_results", engine, index=False, if_exists="append", schema="experiments"
-    )
+    df.to_sql("pass1_results", engine, if_exists="append", schema="experiments")
 
 
 def insert_pass2_results(id: int):
@@ -208,18 +206,16 @@ def insert_pass2_results(id: int):
     # Save the DataFrame to a CSV file
     df.to_csv("pass2.result.csv", index=False)
     df["document_id"] = id
-    df.to_sql(
-        "pass2_results", engine, index=False, if_exists="append", schema="experiments"
-    )
+    df.to_sql("pass2_results", engine, if_exists="append", schema="experiments")
     print(f"CSV file saved with {len(df)} records.")
 
 
 if __name__ == "__main__":
     # init_schema()
     # id = process_and_insert_txt_to_db(txtfile)
+    id = 5
     # insert_in_out_table(prompt_path, id)
-    id = 4
     # insert_metrics(id)
-    # insert_pass1_results(id)
+    insert_pass1_results(id)
     insert_pass2_results(id)
     print("Data inserted successfully.")
