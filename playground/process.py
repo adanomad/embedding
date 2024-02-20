@@ -16,8 +16,8 @@ from sqlalchemy import create_engine, text
 import ast
 from more_itertools import flatten
 
-MODEL_NAME = "gpt-4-1106-preview"
-# MODEL_NAME = "gpt-3.5-turbo"
+# MODEL_NAME = "gpt-4-1106-preview"
+MODEL_NAME = "gpt-3.5-turbo"
 MAX_TEXT_LENGTH = 4096 * 4  # 16KB
 
 load_dotenv()
@@ -63,7 +63,7 @@ def prepare_prompt(page_text: str, prompt_path: str, page_number: int) -> str:
 
 
 def send_to_chatgpt(input: str, page_number: int) -> dict:
-    print(f"Sending to ChatGPT for page {page_number}...")
+    print(f"Sending to {MODEL_NAME} for page {page_number}...")
     start = time.time()
     response = openai.chat.completions.create(
         model=MODEL_NAME,
@@ -278,8 +278,11 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
         )
         print(f"Topic {topic}: {len(filtered_df)} rows")
         # Get relevant tags from documents_tags
-
-        df_citations = filtered_df["citations"].apply(ast.literal_eval)
+        # Check if it's a list of strings or a string
+        if isinstance(filtered_df["citations"].iloc[0], list):
+            df_citations = filtered_df["citations"]
+        else:
+            df_citations = filtered_df["citations"].apply(ast.literal_eval)
 
         tags = sorted(set(flatten(df_citations.to_list())))
         # filter df_documents_tags to only include rows where the tag column value is in the tags set
@@ -332,13 +335,15 @@ def read_and_clean_data(file_path):
     return pd.DataFrame(cleaned_data)
 
 
-def filter_data_for_sql(df):
+def filter_data_for_sql(df) -> pd.DataFrame:
     """Filter data to prepare rows for SQL insertion."""
     to_sql_table = []
     for topic in df.columns:
         filtered_df = df[df[topic].notna()][[topic]]
         print(f"Transformed {len(filtered_df)} rows for {topic}")
         for _, row in filtered_df.iterrows():
+            if not row[topic]:
+                continue
             summary = row[topic]["summary"]
             citations = row[topic]["citations"]
             if summary == "" or len(citations) == 0:
@@ -349,61 +354,70 @@ def filter_data_for_sql(df):
                 "citations": citations,
             }
             to_sql_table.append(row)
-    return to_sql_table
+    return pd.DataFrame(to_sql_table)
 
 
-# Command-line argument parsing
+def process(
+    txtfile: str,
+    prompt_1: str,
+    prompt_2: str,
+):
+    """
+    Process the file and prompts to generate the pass 2 prompts and responses.
+
+    """
+    # print("Step 1")
+    PASS1RESULTS = "pass1.results.json"
+
+    data = process_file_and_prompt(txtfile, prompt_1)
+    print(f"Processed {len(data)} pages")
+    # Write data to json file
+    with open(PASS1RESULTS, "w") as file:
+        json.dump(data, file)
+    print(f"Written pass 1 results to {PASS1RESULTS}")
+
+    # # Read it back
+    print("Step 2")
+    df = read_and_clean_data(PASS1RESULTS)
+    print(f"Read {len(df)} rows from {PASS1RESULTS}")
+    topic_columns = df.columns.tolist()
+    print(f"Topic columns: {topic_columns}")
+    to_sql_table = filter_data_for_sql(df)
+    # # Write to a file
+    pd.DataFrame(to_sql_table).to_csv("pass2.csv", index=False)
+    prompts = create_collect_prompts(
+        prompt_2,
+        to_sql_table,
+    )
+    print(f"Created {len(prompts)} prompts")
+    # Write prompts to file
+    for idx, prompt in enumerate(prompts):
+        with open(f"pass2.{idx + 1}.prompt.in.txt", "w") as file:
+            file.write(prompt)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = []
+        for idx, prompt in enumerate(prompts):
+            futures.append(executor.submit(part2_chatgpt, idx, prompt))
+        responses = [
+            future.result() for future in concurrent.futures.as_completed(futures)
+        ]
+    # Write responses to file
+    for idx, response in enumerate(responses):
+        with open(f"pass2.{idx + 1}.prompt.out.txt", "w") as file:
+            file.write(response)
+    print(f"Written {len(responses)} responses to pass2.*.prompt.out.txt")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--step", type=int, default=2)
     parser.add_argument(
         "--txtfile",
         type=str,
-        default="../data/davebuster/DAVEBUSTER'SENTERTAINMENTINC_20220629_8-K_EX-101_CreditLoanAgreement.PDF.txt",
+        default="../data/m&a/arco/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf.txt",
     )
     parser.add_argument("--prompt_1", type=str, default="credit.pass1.prompt.txt")
     parser.add_argument("--prompt_2", type=str, default="credit.pass2.prompt.txt")
-    parser.add_argument("--pass1results", type=str, default="pass1.results.json")
     args = parser.parse_args()
 
-    if args.step == 1:
-        print("Step 1")
-        data = process_file_and_prompt(args.txtfile, args.prompt_1)
-        print(f"Processed {len(data)} pages")
-        # Write data to json file
-        with open(args.pass1results, "w") as file:
-            json.dump(data, file)
-        print(f"Written pass 1 results to {args.pass1results}")
-        df = read_and_clean_data(args.pass1results)
-        print(f"Read {len(df)} rows from {args.pass1results}")
-        topic_columns = df.columns.tolist()
-        print(f"Topic columns: {topic_columns}")
-        to_sql_table = filter_data_for_sql(df)
-        # Write to a file
-        pd.DataFrame(to_sql_table).to_csv("pass2.csv", index=False)
-    elif args.step == 2:
-        print("Step 2")
-        df = pd.read_csv("pass2.csv")
-        print(f"Read {len(df)} rows from pass2.csv")
-        prompts = create_collect_prompts(
-            args.prompt_2,
-            df,
-        )
-        print(f"Created {len(prompts)} prompts")
-        # Write prompts to file
-        for idx, prompt in enumerate(prompts):
-            with open(f"pass2.{idx + 1}.prompt.in.txt", "w") as file:
-                file.write(prompt)
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            futures = []
-            for idx, prompt in enumerate(prompts):
-                futures.append(executor.submit(part2_chatgpt, idx, prompt))
-            responses = [
-                future.result() for future in concurrent.futures.as_completed(futures)
-            ]
-        # Write responses to file
-        for idx, response in enumerate(responses):
-            with open(f"pass2.{idx + 1}.prompt.out.txt", "w") as file:
-                file.write(response)
-        print(f"Written {len(responses)} responses to pass2.*.prompt.out.txt")
+    process(args.txtfile, args.prompt_1, args.prompt_2)

@@ -20,15 +20,13 @@ Your job is to extract specified information from the agreement, as described in
 * `closing_date`: The date that the transaction is scheduled to close, like 'YYYY/MM/DD'. Include citations.
 </data_definitions>
 
-Does this page contain any useful information for each of the Data Definitions? The page number is enclosed in the tag <PAGE #>. Provide your response in a json, include `page_number` as an integer, `citations` as a list of strings for each data definition where applicable, and a `summary` that is a short summary of the page text. For each of the data definitions, use `null` if no useful information is found, otherwise provide a short summary pertaining to the Data Definition and the associated citations.
+Does this page contain any useful information for each of the Data Definitions? The page number is enclosed in the tag <PAGE #>. Provide your response in a json. For each of the data definitions, use `null` if no useful information is found, otherwise provide a short summary pertaining to the Data Definition and the associated citations.
 <example_response>
 {
-"page_number": 13,
-"summary": "The text discusses ...",
 "deal_structure": {"summary":"Deal is structured as ...", "citations": ["<P102S8/>", "<P102S9/>"]},
 "rollover": {"summary":"", "citations": []},
 "consideration": {"summary":"", "citations": []},
-"consideration_attributes": {"summary":"", "citations": []},
+"consideration_attributes": {"summary":"", "citations": "citations": ["<P122S7/>", "<P142S1/>"]},
 "deal_size_type": {"summary":"", "citations": []},
 "deal_size": {"summary":"", "citations": []},
 "escrow_coverage": {"summary":"", "citations": []},
