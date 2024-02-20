@@ -58,25 +58,50 @@ def get_new_doc_id(filename: str) -> str:
     return str(new_doc_id)
 
 
-def pdf2text_inject_tags(pdf_path, inject_tokens=True) -> str:
-    all_text_file = ""
+class Box(BaseModel):
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+class TagParagraphBox(BaseModel):
+    tag: str
+    paragraph: str
+    box: Box
+
+
+def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
+    """
+    Extracts bounding boxes and text of paragraphs from a PDF.
+
+    :param pdf_path: Path to the PDF file.
+    :return: A list of tuples, each containing the bounding box (as a rect) and the text of a paragraph.
+    """
+    segments: list[TagParagraphBox] = []
+
     with fitz.open(pdf_path) as doc:
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
-            print(f"Processing page {page_num}...")
-            text = page.get_text()
-            if inject_tokens:
-                # This could cause string find issues if the text is not found in original document
-                text = text.replace("\n", " ")
-                text = re.sub(r"\s+", " ", text).strip()
-                indexed_sentences = extract_segments(text)
-                text = inject_indices(indexed_sentences, page_num)
-                all_text_file += text
-            else:
-                all_text_file += f"<PAGE {page_num}/>\n"
-                all_text_file += text
+            blocks = page.get_text("blocks")
+            print(f"Processing page {page_num}, {len(blocks)} bounding boxes...")
+            blocks.sort(
+                key=lambda block: (block[1], block[0])
+            )  # Sort blocks by y0, x0 (top to bottom, left to right)
+            for block_idx, block in enumerate(blocks):
+                rect = fitz.Rect(block[:4])  # The bounding box of the block
+                text = block[4]  # The text content of the block
+                tag = f"<P{page_num}S{block_idx}/>"
+                segments.append(
+                    TagParagraphBox(
+                        tag=tag,
+                        paragraph=text,
+                        box=Box(x0=rect.x0, y0=rect.y0, x1=rect.x1, y1=rect.y1),
+                    )
+                )
+
     print(f"Text extracted from {pdf_path}")
-    return all_text_file
+    return segments
 
 
 def extract_segments(text: str) -> list[str]:
@@ -704,22 +729,25 @@ def tagged_text_process(
     print("Written pass 2 results to pass2.result.csv")
 
 
-def write_document_tags_to_sql(filename: str, document_content: str) -> int:
+def write_document_tags_to_sql(filename: str, boxes: list[TagParagraphBox]) -> int:
     document_id = get_new_doc_id(filename)
     print(f"Writing document tags to SQL for document_id {document_id}")
-    # split document_content into sentences using regex looking for tag structure of <P\d+S\d+/>
-    sentences = re.split(r"(<P\d+S\d+/>)", document_content)
 
-    # Initialize an empty list to hold the structured data
-    structured_data = []
+    # Convert TagParagraphBox instances to a list of dicts with the box converted to an array
+    records = [
+        {
+            "tag": box.tag,
+            "paragraph": box.paragraph,
+            "bounding_box": [box.box.x0, box.box.y0, box.box.x1, box.box.y1],
+            "document_id": document_id,
+        }
+        for box in boxes
+    ]
 
-    # Iterate through the sentences list two steps at a time
-    for i in range(0, len(sentences), 2):
-        content = sentences[i]
-        tag = sentences[i + 1] if i + 1 < len(sentences) else None
-        structured_data.append({"tag": tag, "paragraph": content})
-    df = pd.DataFrame(structured_data)
-    df["document_id"] = document_id
+    # Convert records to a DataFrame
+    df = pd.DataFrame(records)
+
+    # Assuming 'engine' is already defined and connected to your PostgreSQL database
     df.to_sql(
         "documents_tags", engine, index=False, if_exists="append", schema="experiments"
     )
@@ -743,12 +771,12 @@ if __name__ == "__main__":
         default="../data/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf",
         # default="../data/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf",
     )
-    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--limit", type=int, default=1)
     args = parser.parse_args()
 
-    # Write the prompt to sql if not exist (temp here)
-    write_prompt_file_to_sql("credit.pass1.prompt.txt")
-    write_prompt_file_to_sql("credit.pass2.prompt.txt")
+    # # Write the prompt to sql if not exist (temp here)
+    # write_prompt_file_to_sql("credit.pass1.prompt.txt")
+    # write_prompt_file_to_sql("credit.pass2.prompt.txt")
 
     # Extract the document text and inject tags
     document_text_with_tags = pdf2text_inject_tags(args.pdf)
