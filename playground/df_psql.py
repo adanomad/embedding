@@ -14,7 +14,7 @@ txtfile = "../data/m&a/lumen/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apo
 prompt_path = "./"
 
 
-def get_new_doc_id(filename: str):
+def get_new_doc_id(filename: str) -> str:
     query = "SELECT MAX(id) FROM experiments.documents;"
     try:
         doc_id = pd.read_sql(query, engine).values[0][0]
@@ -33,7 +33,7 @@ def get_new_doc_id(filename: str):
         conn.execute(insert_query, {"id": new_doc_id, "filename": filename})
         conn.commit()
 
-    return new_doc_id
+    return str(new_doc_id)
 
 
 def process_and_insert_txt_to_db(filename: str) -> int:
