@@ -15,10 +15,8 @@ from sqlalchemy import create_engine, text
 import ast
 from more_itertools import flatten
 import fitz  # PyMuPDF
-from df_psql import get_new_doc_id
 
-MODEL_NAME = "gpt-4-1106-preview"
-# MODEL_NAME = "gpt-3.5-turbo"
+
 MAX_TEXT_LENGTH = 4096 * 4  # 16KB
 MIN_CHARS = 120  # Minimum characters for a sentence
 MAX_CHARS = 360  # Maximum characters for a sentence
@@ -32,6 +30,32 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("No OpenAI API key found in environment variables")
 openai_client = OpenAI(api_key=api_key)
+
+# MODEL_NAME = "gpt-4-1106-preview"
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+
+
+def get_new_doc_id(filename: str) -> str:
+    query = "SELECT MAX(id) FROM experiments.documents;"
+    try:
+        doc_id = pd.read_sql(query, engine).values[0][0]
+        print(f"Existing document_id: {doc_id}")
+        new_doc_id = int(doc_id) + 1
+    except Exception:
+        new_doc_id = 1
+        pd.DataFrame({"id": [1], "filename": [filename]}).to_sql(
+            "documents", engine, index=False, if_exists="append", schema="experiments"
+        )
+
+    # Use parameterized query for INSERT
+    insert_query = text(
+        "INSERT INTO experiments.documents (id, filename) VALUES (:id, :filename)"
+    )
+    with engine.connect() as conn:
+        conn.execute(insert_query, {"id": new_doc_id, "filename": filename})
+        # conn.commit()
+
+    return str(new_doc_id)
 
 
 def pdf2text_inject_tags(pdf_path, inject_tokens=True) -> str:
@@ -207,11 +231,18 @@ def prepare_prompt(page_text: str, prompt_name: str, page_number: int) -> str:
 def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
     print(f"Sending to {MODEL_NAME} for page {page_number}...")
     start = time.time()
-    response = openai.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[{"content": input, "role": "user"}],
-        response_format={"type": "json_object"},
-    )
+    try:
+        response = openai.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"content": input, "role": "user"}],
+            response_format={"type": "json_object"},
+        )
+    except openai.RateLimitError as e:
+        print(f"Rate limit error processing page {page_number}: {str(e)}")
+        print("Waiting 30s before retrying...")
+        time.sleep(30)
+        return send_to_chatgpt(input, page_number)
+
     content = response.choices[0].message.content
     if content is None:
         print(f"No content error processing page: {input}")
@@ -293,7 +324,7 @@ def process_step_1_file_and_prompt(
                 )
             )
     else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
             for page_num, page_data in enumerate(pages[:limit]):
                 print(f"Processing page {page_num + 1} of {len(pages)}")
@@ -389,19 +420,23 @@ def replace_text_inside_tag(body: str, tag: str, replacement_str: str) -> str:
     return replaced_text
 
 
+# Function to parse the custom-formatted strings in 'citations' column
+def parse_citations(citation_str):
+    # Remove the curly braces and split the string into individual elements
+    elements = citation_str.strip("{}").split(",")
+    # Clean each element by removing unwanted characters
+    # parsed_elements = [elem.strip("<>/") for elem in elements]
+    return elements
+
+
 def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
     """
     Prompt 2 needs to look up the citations column and for each citation string,
     get the relevant quote from the summary column in documents_tags table
     and then ask the question to the model.
     """
-    # The response may have whitespace, so we need to strip it
-    responses = responses.map(lambda x: x.strip() if isinstance(x, str) else x)
-    responses.columns = responses.columns.str.strip()
-
     # Read the template_path file
-    with open(template_path, "r") as file:
-        template = file.read()
+    template = read_prompt_from_sql(template_path)
     DATAFRAME_PLACEHOLDER = "{{.dataframe}}"
     CITATIONS_PLACEHOLDER = "{{.citations}}"
     if DATAFRAME_PLACEHOLDER not in template:
@@ -445,10 +480,17 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
         # Check if it's a list of strings or a string
         if isinstance(filtered_df["citations"].iloc[0], list):
             df_citations = filtered_df["citations"]
+            tags = sorted(set(flatten(df_citations.to_list())))
         else:
-            df_citations = filtered_df["citations"].apply(ast.literal_eval)
+            all_citations = [
+                citation
+                for sublist in filtered_df["citations"].apply(parse_citations)
+                for citation in sublist
+            ]
+            unique_citations = set(all_citations)
+            df_citations = unique_citations
+            tags = sorted(df_citations)
 
-        tags = sorted(set(flatten(df_citations.to_list())))
         # filter df_documents_tags to only include rows where the tag column value is in the tags set
         filtered_df_documents_tags = df_documents_tags[
             df_documents_tags["tag"].isin(tags)
@@ -540,7 +582,7 @@ def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
     print(f"Created {len(prompts)} topic prompts for pass 2.")
     promptios: List[PromptIO] = []
     t0 = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
         for prompt_num, prompt_input in enumerate(prompts):
             if prompt_input == "":
@@ -608,6 +650,13 @@ def write_prompt_file_to_sql(prompt_name: str):
     df.to_sql("prompts", engine, if_exists="append", schema="experiments", index=False)
 
 
+def read_pass1_results_from_sql(document_id: int) -> pd.DataFrame:
+    query = (
+        f"SELECT * FROM experiments.pass1_results WHERE document_id = '{document_id}'"
+    )
+    return pd.read_sql_query(query, engine)
+
+
 def tagged_text_process(
     document_id: int,
     prompt_name_1: str,
@@ -637,6 +686,8 @@ def tagged_text_process(
         "pass1_results", engine, if_exists="append", schema="experiments"
     )
     print(f"Written {len(to_sql_table)} records to experiments.pass1_results")
+
+    # to_sql_table = read_pass1_results_from_sql(document_id)
 
     promptios_2 = process_step_2(prompt_name_2, to_sql_table)
     promptios_to_sql(promptios_2, document_id, 2)
@@ -675,9 +726,13 @@ def write_document_tags_to_sql(filename: str, document_content: str) -> int:
     return int(document_id)
 
 
-def read_prompt_from_sql(prompt_name: str) -> pd.DataFrame:
-    query = f"SELECT * FROM experiments.promptios WHERE prompt_name = {prompt_name}"
-    return pd.read_sql_query(query, engine)
+def read_prompt_from_sql(prompt_name: str) -> str:
+    query = (
+        f"SELECT content FROM experiments.prompts WHERE prompt_name = '{prompt_name}'"
+    )
+    with engine.connect() as conn:
+        result = conn.execute(text(query))
+        return result.scalar()
 
 
 if __name__ == "__main__":
