@@ -456,6 +456,44 @@ def parse_citations(citation_str):
     return elements
 
 
+def filter_tags_with_surroundings(df, tags, surrounding=8):
+    """
+    Filters a DataFrame to include rows where the tag column value is in the specified set of tags,
+    along with three surrounding tags above and below each match.
+
+    Parameters:
+    - df: pandas DataFrame with a 'tag' column.
+    - tags: Set of tag values to filter by.
+
+    Returns:
+    - A filtered pandas DataFrame.
+    """
+    # First, find the indices of rows where the tag column value is in the tags set
+    matching_indices = df.index[df["tag"].isin(tags)].tolist()
+
+    # Initialize a set to hold all indices to include (for deduplication)
+    all_indices = set()
+
+    # For each matching index, add it and the three surrounding indices above and below
+    for idx in matching_indices:
+        # Calculate ranges, ensuring we don't go out of bounds
+        start_idx = max(idx - surrounding, 0)
+        end_idx = min(
+            idx + surrounding + 1, len(df)
+        )  # +1 because range end is exclusive
+
+        # Add the range of indices to the set
+        all_indices.update(range(start_idx, end_idx))
+
+    # Convert the set of indices back to a sorted list
+    final_indices = sorted(list(all_indices))
+
+    # Use the final indices to filter the DataFrame
+    filtered_df = df.loc[final_indices, ["tag", "paragraph"]]
+
+    return filtered_df
+
+
 def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
     """
     Prompt 2 needs to look up the citations column and for each citation string,
@@ -516,10 +554,9 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
             df_citations = unique_citations
             tags = sorted(df_citations)
 
-        # filter df_documents_tags to only include rows where the tag column value is in the tags set
-        filtered_df_documents_tags = df_documents_tags[
-            df_documents_tags["tag"].isin(tags)
-        ][["tag", "paragraph"]]
+        filtered_df_documents_tags = filter_tags_with_surroundings(
+            df_documents_tags, tags
+        )
 
         combined_strings = filtered_df_documents_tags.apply(
             lambda x: f"{x['tag']} {x['paragraph']}", axis=1
