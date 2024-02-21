@@ -35,27 +35,32 @@ openai_client = OpenAI(api_key=api_key)
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 
 
-def get_new_doc_id(filename: str) -> str:
-    query = "SELECT MAX(id) FROM experiments.documents;"
-    try:
-        doc_id = pd.read_sql(query, engine).values[0][0]
-        print(f"Existing document_id: {doc_id}")
-        new_doc_id = int(doc_id) + 1
-    except Exception:
-        new_doc_id = 1
-        pd.DataFrame({"id": [1], "filename": [filename]}).to_sql(
-            "documents", engine, index=False, if_exists="append", schema="experiments"
-        )
+def upload_file_new_doc_id(pdf_path: str) -> int:
+    filename = os.path.basename(pdf_path)
 
-    # Use parameterized query for INSERT
-    insert_query = text(
-        "INSERT INTO experiments.documents (id, filename) VALUES (:id, :filename)"
-    )
     with engine.connect() as conn:
-        conn.execute(insert_query, {"id": new_doc_id, "filename": filename})
-        # conn.commit()
+        transaction = conn.begin()  # Start a new transaction
+        query = text("SELECT MAX(id) FROM experiments.documents;")
+        result = conn.execute(query).fetchone()
+        doc_id = result[0] if result[0] is not None else 0
+        new_doc_id = doc_id + 1
 
-    return str(new_doc_id)
+        # Read the PDF file as binary data
+        with open(pdf_path, "rb") as file:
+            pdf_data = file.read()
+
+        # Insert the new document into the database with the raw PDF data
+        insert_query = text(
+            "INSERT INTO experiments.documents (id, filename, raw_file) VALUES (:id, :filename, :raw_file)"
+        )
+        conn.execute(
+            insert_query,
+            {"id": new_doc_id, "filename": filename, "raw_file": pdf_data},
+        )
+        transaction.commit()  # Explicitly commit the transaction
+        print(f"Uploaded {filename} to document_id {new_doc_id}")
+
+    return new_doc_id
 
 
 class Box(BaseModel):
@@ -84,7 +89,7 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             blocks = page.get_text("blocks")
-            print(f"Processing page {page_num}, {len(blocks)} bounding boxes...")
+            print(f"Processing page {page_num}, bounding boxes {len(blocks)}...")
             blocks.sort(
                 key=lambda block: (block[1], block[0])
             )  # Sort blocks by y0, x0 (top to bottom, left to right)
@@ -225,13 +230,10 @@ def read_and_split_file(document_id: int) -> List[str]:
     df_tag_paragraph = get_document_tags_paragraphs(document_id)
     current_page = ""
     for tag, paragraph in df_tag_paragraph.itertuples(index=False):
-        print(f"Processing tag: {tag}, paragraph length: {len(paragraph)}")
         if len(paragraph) + len(current_page) > MAX_TEXT_LENGTH:
-            print(f"Starting new page: {len(pages)}")
             pages.append(current_page)
             current_page = tag + " " + paragraph
         else:
-            print(f"Added to page {len(pages)}")
             current_page += " " + (tag if tag else "") + " " + paragraph
     # Don't forget to add the last page if it's not empty
     if current_page:
@@ -478,9 +480,7 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
 
     # Read documents_tags table
     document_id = responses["document_id"].iloc[0]
-    query = (
-        f"SELECT * FROM experiments.documents_tags WHERE document_id = '{document_id}'"
-    )
+    query = f"SELECT tag, paragraph FROM experiments.documents_tags WHERE document_id = '{document_id}'"
     df_documents_tags = pd.read_sql_query(query, engine)
     unique_topics = responses["topic"].unique()
     prompts = []
@@ -729,8 +729,7 @@ def tagged_text_process(
     print("Written pass 2 results to pass2.result.csv")
 
 
-def write_document_tags_to_sql(filename: str, boxes: list[TagParagraphBox]) -> int:
-    document_id = get_new_doc_id(filename)
+def write_document_tags_to_sql(boxes: list[TagParagraphBox], document_id: int) -> int:
     print(f"Writing document tags to SQL for document_id {document_id}")
 
     # Convert TagParagraphBox instances to a list of dicts with the box converted to an array
@@ -780,9 +779,9 @@ if __name__ == "__main__":
 
     # Extract the document text and inject tags
     document_text_with_tags = pdf2text_inject_tags(args.pdf)
-    filename = os.path.basename(args.pdf)
-    document_id = write_document_tags_to_sql(filename, document_text_with_tags)
-    print(f"Document ID: {document_id}")
+    document_id = upload_file_new_doc_id(args.pdf)
+    print(f"document_id: {document_id}")
+    write_document_tags_to_sql(document_text_with_tags, document_id)
 
     tagged_text_process(
         document_id, "credit.pass1.prompt.txt", "credit.pass2.prompt.txt", args.limit
