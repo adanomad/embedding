@@ -286,7 +286,7 @@ def process_step_1_file_and_prompt(
     return promptios
 
 
-def extract_string_between_tags(body: str, tag: str) -> str | None:
+def extract_string_between_tags(body: str, tag: str) -> str:
     """
     Extracts and returns the string content between the provided XML-style tag.
 
@@ -304,10 +304,13 @@ def extract_string_between_tags(body: str, tag: str) -> str | None:
     match = re.search(pattern, body, re.DOTALL)
 
     # If a match is found, return the first group (content between the tags); otherwise, return None
-    return match.group(1) if match else None
+    response = match.group(1) if match else None
+    if response is None:
+        raise ValueError(f"No content found for tag <{tag}/> in the prompt file.")
+    return response
 
 
-def find_line_with_needle(body: str, needle: str) -> str | None:
+def find_line_with_needle(body: str, needle: str) -> str:
     """
     Searches for a line in the given body that contains the specified needle.
 
@@ -326,7 +329,7 @@ def find_line_with_needle(body: str, needle: str) -> str | None:
         if needle in line:
             return line  # Return the first line that contains the needle
 
-    return None  # Return None if the needle is not found in any line
+    raise ValueError(f"No line found with needle {needle} in the prompt file.")
 
 
 def replace_text_inside_tag(body: str, tag: str, replacement_str: str) -> str:
@@ -414,6 +417,30 @@ def filter_tags_with_surroundings(df, tags, max_surrounding=3):
     return filtered_df
 
 
+def filter_json_by_field_value(json_data, field_name, value):
+    """
+    Filters a list of objects within a JSON object, returning only those objects where
+    the specified field_name matches the given value.
+
+    Parameters:
+    - json_data: The JSON object containing a list of objects to be filtered.
+    - field_name: The name of the field to check in each object.
+    - value: The value that field_name must match for an object to be included in the result.
+
+    Returns:
+    - A list of objects from the original JSON object where field_name matches the specified value.
+    """
+    # Ensure the input is a list; if not, return an empty list
+    if not isinstance(json_data, list):
+        print("The input JSON data is not a list.")
+        return []
+
+    # Filter the list based on the field_name and value
+    filtered_list = [obj for obj in json_data if obj.get(field_name) == value]
+
+    return filtered_list
+
+
 def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
     """
     Prompt 2 needs to look up the citations column and for each citation string,
@@ -433,8 +460,11 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
             f"Prompt file {template} does not contain {CITATIONS_PLACEHOLDER}"
         )
     terminologies = extract_string_between_tags(template, "terminology")
-    if terminologies is None:
-        raise ValueError("No terminology found in the template")
+    example_responses_str = extract_string_between_tags(template, "example_response")
+
+    # Parse this as a JSON
+    example_responses_json = json.loads(example_responses_str)
+    # this json contains a list of objects with keys "field_name" the value should match the terminologies
 
     # Read documents_tags table
     document_id = responses["document_id"].iloc[0]
@@ -444,11 +474,17 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
     prompts = []
     for topic in unique_topics:
         topic_definition = find_line_with_needle(terminologies, topic)
-        if topic_definition is None:
-            raise ValueError(f"No definition found for {topic} in the template")
+        example_response_filtered_str = filter_json_by_field_value(
+            example_responses_json, "field_name", topic
+        )[0]
+
         topic_prompt = replace_text_inside_tag(
             template, "terminology", topic_definition
         )
+        topic_prompt = replace_text_inside_tag(
+            topic_prompt, "example_response", example_response_filtered_str
+        )
+
         filtered_df = responses[responses["topic"] == topic]
         dataframe_texts = (
             filtered_df[["citations", "summary"]]
