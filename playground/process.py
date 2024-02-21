@@ -606,17 +606,9 @@ def extract_json_from_code_block(text: str) -> dict:
     match = re.search(pattern, text, re.DOTALL)
 
     if match:
-        json_content = match.group(1)
-        try:
-            # Attempt to parse the JSON content
-            return json.loads(json_content)
-        except json.JSONDecodeError:
-            print("Failed to decode JSON.")
-    else:
-        print("WARN: No JSON found within code block markers.")
-        print(text)
+        text = match.group(1)
 
-    return {}
+    return json.loads(text)
 
 
 def extract_json_data(promptio: PromptIO) -> dict:
