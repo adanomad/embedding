@@ -37,6 +37,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 # Override
 MODEL_NAME = "gpt-4-turbo-preview"
 MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
+MAX_TEXT_LENGTH = 4096 * 8 * 2  # 64KB might work better
 
 
 def upload_file_new_doc_id(pdf_path: str) -> int:
@@ -565,6 +566,30 @@ def read_and_clean_data(file_path):
     return data
 
 
+def merge_duplicate_topics(df):
+    """
+    Merges duplicate rows based on the 'topic' column by concatenating 'summary' and 'citations'.
+
+    Parameters:
+    - df: DataFrame with columns 'topic', 'summary', and 'citations'.
+
+    Returns:
+    - A DataFrame with merged rows for each unique topic.
+    """
+    # Define custom aggregation functions for 'summary' and 'citations'
+    agg_funcs = {
+        "summary": lambda x: " ".join(x),  # Concatenate summaries with a space
+        "citations": lambda x: sum(
+            list(x), []
+        ),  # Flatten and concatenate lists of citations
+    }
+
+    # Group by 'topic' and aggregate using the defined functions
+    merged_df = df.groupby("topic", as_index=False).agg(agg_funcs)
+
+    return merged_df
+
+
 def filter_data_for_sql(df) -> pd.DataFrame:
     """Filter data to prepare rows for SQL insertion."""
     to_sql_table = []
@@ -588,7 +613,10 @@ def filter_data_for_sql(df) -> pd.DataFrame:
                 "citations": citations,
             }
             to_sql_table.append(row)
-    return pd.DataFrame(to_sql_table)
+    filtered_df = pd.DataFrame(to_sql_table)
+    merged_df = merge_duplicate_topics(filtered_df)
+
+    return merged_df
 
 
 def extract_json_from_code_block(text: str) -> dict:
@@ -774,16 +802,6 @@ def fix_malformed_json(json_obj) -> dict:
     return json_obj
 
 
-# # Example usage
-# malformed_json = {
-#     'deal_structure': 'Asset and Stock Sale/Purchase',
-#     'citations': ['<P5S6/>', '<P30S34/>', '<P37S4/>', '<P37S5/>', '<P37S6/>', '<P68S1/>', '<P110S3/>', '<P110S4/>', '<P128S0/>'],
-#     'explanation': "The transaction contains elements of both an asset sale/purchase and a stock sale/purchase. Citations indicate the sale and purchase of equity interests (which aligns with a stock sale/purchase), such as where sellers desire to sell and purchasers desire to acquire transferred equity interests. Other citations mention the structure as an asset sale/purchase, with references to treating the sale for tax purposes as an asset purchase and a step-up in tax basis for all assets involved. The combination of these factors and specific references to the transaction's structure lead to the conclusion that this is an Asset and Stock Sale/Purchase."
-# }
-# fixed_json = fix_malformed_json(malformed_json)
-# print(json.dumps(fixed_json, indent=2))
-
-
 def fix_df_columns(df, expected_columns):
     """
     Detects unexpected columns and reformats the DataFrame to match the expected structure.
@@ -841,7 +859,6 @@ def tagged_text_process(
     print(f"Topic columns: {topic_columns}")
     to_sql_table = filter_data_for_sql(df_pass2_src)
 
-    print("Step 2")
     # Write to the database table experiments.pass1_results
     to_sql_table["document_id"] = document_id
     to_sql_table["model"] = MODEL_NAME
@@ -850,6 +867,7 @@ def tagged_text_process(
     )
     print(f"Written {len(to_sql_table)} records to experiments.pass1_results")
 
+    print("Step 2")
     # to_sql_table = read_pass1_results_from_sql(document_id)
 
     promptios_2 = process_step_2(prompt_name_2, to_sql_table)
@@ -915,6 +933,7 @@ def do_qa(pdf_path: str, prompt_1: str, prompt_2: str, limit: int | None = None)
     print(f"document_id: {document_id}")
     write_document_tags_to_sql(document_text_with_tags, document_id)
     tagged_text_process(document_id, prompt_1, prompt_2, limit)
+    print(f"Processed {pdf_path} as document_id {document_id}")
 
 
 if __name__ == "__main__":

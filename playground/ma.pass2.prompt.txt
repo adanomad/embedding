@@ -29,6 +29,24 @@ Deliver results in the following format (json) with a citation of the specific c
 <example_response>
 [
     {
+        "field_name": "deal_structure",
+        "value": "Asset Sale/Purchase",
+        "citations": ["P4S1", "P4S5"],
+        "explanation": "Insert summary here"
+    },
+    {
+        "field_name": "rollover",
+        "value": "Founder",
+        "citations": ["P4S1", "P4S5"],
+        "explanation": "Insert summary here"
+    },
+    {
+        "field_name": "consideration",
+        "value": "Cash and Stock Election",
+        "citations": ["P4S1", "P4S5"],
+        "explanation": "Insert summary here"
+    },
+    {
         "field_name": "closing_date",
         "value": "YYYY/MM/DD",
         "citations": ["P4S1", "P4S5"],
@@ -59,38 +77,8 @@ Deliver results in the following format (json) with a citation of the specific c
         "explanation": "Insert summary here"
     },
     {
-        "field_name": "breakup_triggers",
-        "value": "Breach; Buyer Failure to Close",
-        "citations": ["P4S1", "P4S5"],
-        "explanation": "Insert summary here"
-    },
-    {
-        "field_name": "reverse_termination_fee",
-        "value": "$4,250,145",
-        "citations": ["P4S1", "P4S5"],
-        "explanation": "Insert summary here"
-    },
-    {
-        "field_name": "closing_conditions",
-        "value": "MAE, FCC Approval",
-        "citations": ["P4S1", "P4S5"],
-        "explanation": "Insert summary here"
-    },
-    {
-        "field_name": "financing",
-        "value": "Debt Financing",
-        "citations": ["P4S1", "P4S5"],
-        "explanation": "Insert summary here"
-    },
-    {
-        "field_name": "escrow_coverage",
-        "value": "Indemnity; Earnout",
-        "citations": ["P4S1", "P4S5"],
-        "explanation": "Insert summary here"
-    },
-    {
-        "field_name": "deal_size",
-        "value": "$12,450,250",
+        "field_name": "consideration_attributes",
+        "value": "Contingent Value Right",
         "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
@@ -101,26 +89,38 @@ Deliver results in the following format (json) with a citation of the specific c
         "explanation": "Insert summary here"
     },
     {
-        "field_name": "consideration_attributes",
-        "value": "Contingent Value Right",
+        "field_name": "deal_size",
+        "value": "$12,450,250",
+        "citations": ["P4S1", "P4S5"],
+        "explanation": "Insert summary here"
+    }, 
+    {
+        "field_name": "escrow_coverage",
+        "value": "Indemnity; Earnout",
         "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
-        "field_name": "consideration",
-        "value": "Cash and Stock Election",
+        "field_name": "financing",
+        "value": "Debt Financing",
         "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
-        "field_name": "rollover",
-        "value": "Founder",
+        "field_name": "closing_conditions",
+        "value": "MAE, FCC Approval",
         "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
-        "field_name": "deal_structure",
-        "value": "Asset Sale/Purchase",
+        "field_name": "reverse_termination_fee",
+        "value": "$4,250,145",
+        "citations": ["P4S1", "P4S5"],
+        "explanation": "Insert summary here"
+    },
+    {
+        "field_name": "reverse_termination_fee_triggers",
+        "value": "Breach; Buyer Failure to Close",
         "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     }
