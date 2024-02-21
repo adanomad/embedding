@@ -88,7 +88,7 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
     :return: A list of tuples, each containing the bounding box (as a rect) and the text of a paragraph.
     """
     segments: list[TagParagraphBox] = []
-
+    skipped_texts = []
     with fitz.open(pdf_path) as doc:  # type: ignore
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
@@ -103,7 +103,7 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
                 text = " ".join(text.strip().split())
                 if len(text) < MIN_CHARS_IN_RECT:
                     if len(text) > 0:
-                        print(f"Skipping short text: '{text}'")
+                        skipped_texts.append(text)
                     continue
                 tag = f"<P{page_num}S{block_idx}/>"
                 segments.append(
@@ -113,7 +113,7 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
                         box=Box(x0=rect.x0, y0=rect.y0, x1=rect.x1, y1=rect.y1),
                     )
                 )
-
+    print(f"Skipping short texts: '{skipped_texts}'")
     print(f"Text extracted from {pdf_path}, bounding boxes {len(segments)}.")
     return segments
 
@@ -235,6 +235,9 @@ class PromptIO(BaseModel):
     page: int
     time_taken_seconds: float
     model: str
+
+    def len(self) -> int:
+        return len(self.prompt_in) + len(self.prompt_out)
 
 
 # Main function to process the file and prompt
@@ -506,11 +509,11 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
             df_citations = unique_citations
             tags = sorted(df_citations)
 
-        filtered_df_documents_tags = filter_tags_with_surroundings(
+        df_surrounding_documents_tags = filter_tags_with_surroundings(
             df_documents_tags, tags
         )
 
-        combined_strings = filtered_df_documents_tags.apply(
+        combined_strings = df_surrounding_documents_tags.apply(
             lambda x: f"{x['tag']} {x['paragraph']}", axis=1
         ).tolist()
         combined_citations_string = "\n".join(combined_strings)
@@ -639,9 +642,12 @@ def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
         raise ValueError(
             f"Input length {max(lengths)} exceeds maximum length {MAX_TEXT_LENGTH}"
         )
-    print(f"Created {len(prompts)} questions for pass 2")
     topics = to_sql_table["topic"].unique().tolist()
     print(f"Created {len(prompts)} questions for pass 2: {topics}")
+    if len(prompts) != len(topics):
+        print(
+            f"WARN: Number of prompts {len(prompts)} does not match number of topics {len(topics)}"
+        )
     promptios: List[PromptIO] = []
     t0 = time.time()
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -651,23 +657,25 @@ def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
                 continue
 
             # Use a task function to encapsulate the call with context
-            def task(p_num=prompt_num, p_data=prompt_input) -> PromptIO:
-                response, seconds = send_chatgpt_2(p_num + 1, p_data)
+            def task(prompt_task_num, prompt_task_input) -> PromptIO:
+                response, seconds = send_chatgpt_2(
+                    prompt_task_num + 1, prompt_task_input
+                )
                 return PromptIO(
-                    prompt_in=prompt_input,
+                    prompt_in=prompt_task_input,
                     prompt_out=response,
-                    page=p_num,
+                    page=prompt_task_num,
                     time_taken_seconds=seconds,
                     model=MODEL_NAME,
                 )
 
-            futures.append(executor.submit(task))
+            futures.append(executor.submit(task, prompt_num, prompt_input))
 
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             promptios.append(result)
 
-    print(f"Processed {len(promptios)} pages in {(time.time() - t0):.2f} seconds")
+    print(f"Processed {len(promptios)} topics in {(time.time() - t0):.2f} seconds")
     return promptios
 
 
