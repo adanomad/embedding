@@ -526,6 +526,33 @@ def filter_data_for_sql(df) -> pd.DataFrame:
     return pd.DataFrame(to_sql_table)
 
 
+def extract_json_from_code_block(text: str) -> dict:
+    """
+    Extracts JSON content from a string that is surrounded by code block markers.
+
+    Parameters:
+    - text: The input string containing the JSON within code block markers.
+
+    Returns:
+    - A dictionary representing the extracted JSON content. Returns an empty dict if parsing fails.
+    """
+    # Pattern to match content within ```json ... ``` markers
+    pattern = r"```\n(.*?)\n```"
+    match = re.search(pattern, text, re.DOTALL)
+
+    if match:
+        json_content = match.group(1)
+        try:
+            # Attempt to parse the JSON content
+            return json.loads(json_content)
+        except json.JSONDecodeError:
+            print("Failed to decode JSON.")
+    else:
+        print("No JSON found within code block markers.")
+
+    return {}
+
+
 def extract_json_data(promptio: PromptIO) -> dict:
     file_content = promptio.prompt_out
     # Check and remove first and last line as they contain ```json and ```, respectively
@@ -533,7 +560,7 @@ def extract_json_data(promptio: PromptIO) -> dict:
         joined = "".join(file_content.splitlines()[1:-1])
         data = json.loads(joined)
     else:
-        data = json.loads(file_content)
+        data = extract_json_from_code_block(file_content)
     return fix_malformed_json(data)
 
 
