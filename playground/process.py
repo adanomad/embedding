@@ -16,7 +16,7 @@ from more_itertools import flatten
 import fitz  # PyMuPDF
 
 
-MIN_CHARS = 120  # Minimum characters for a sentence
+MIN_CHARS_IN_RECT = 10  # Minimum characters for a text block
 MAX_CHARS = 360  # Maximum characters for a sentence
 
 load_dotenv()
@@ -32,11 +32,13 @@ openai_client = OpenAI(api_key=api_key)
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 # 3.5 turbo is cheap but 16k limit is pretty low
 # MODEL_NAME = "gpt-4-1106-preview"
-# MAX_TEXT_LENGTH = 4096 * 4  # 16KB for GPT-3.5 turbo
+MAX_TEXT_LENGTH = 4096 * 4  # 16KB for GPT-3.5 turbo
 
 # Override
-MODEL_NAME = "gpt-4-turbo-preview"
-MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
+# MODEL_NAME = "gpt-4-turbo-preview"
+# MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
+
+MAX_SEGMENTS_LENGTH = MAX_TEXT_LENGTH / 2  # Optimizing for how many API calls we make
 
 
 def upload_file_new_doc_id(pdf_path: str) -> int:
@@ -99,6 +101,11 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
             for block_idx, block in enumerate(blocks):
                 rect = fitz.Rect(block[:4])  # The bounding box of the block
                 text = block[4]  # The text content of the block
+                # Remove any leading/trailing whitespace and ignore empty strings, condense whitespace
+                text = " ".join(text.strip().split())
+                if len(text) < MIN_CHARS_IN_RECT:
+                    print(f"Skipping short text: {text}")
+                    continue
                 tag = f"<P{page_num}S{block_idx}/>"
                 segments.append(
                     TagParagraphBox(
@@ -118,19 +125,24 @@ def read_and_split_file(document_id: int) -> List[str]:
     A page is defined as a string of text with a maximum length of MAX_TEXT_LENGTH.
     It does not mean a page in the traditional book sense.
     """
-    pages = []
+    t0 = time.time()
+    chunks = []
     df_tag_paragraph = get_document_tags_paragraphs(document_id)
     current_page = ""
     for tag, paragraph in df_tag_paragraph.itertuples(index=False):
-        if len(paragraph) + len(current_page) > MAX_TEXT_LENGTH / 8:
-            pages.append(current_page)
+        if len(paragraph) + len(current_page) > MAX_SEGMENTS_LENGTH:
+            chunks.append(current_page)
             current_page = tag + " " + paragraph
         else:
             current_page += " " + (tag if tag else "") + " " + paragraph
     # Don't forget to add the last page if it's not empty
     if current_page:
-        pages.append(current_page)
-    return pages
+        chunks.append(current_page)
+    t1 = time.time() - t0
+    print(
+        f"Document_id {document_id} was split into {len(chunks)} chunks in {t1:.2f} seconds"
+    )
+    return chunks
 
 
 # Function to read and prepare the prompt
@@ -148,7 +160,6 @@ def prepare_prompt(page_text: str, prompt_name: str) -> str:
 
 
 def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
-    print(f"Sending to {MODEL_NAME} for page {page_number}...")
     if len(input) > MAX_TEXT_LENGTH:
         raise ValueError(
             f"Input length {len(input)} exceeds maximum length {MAX_TEXT_LENGTH}"
@@ -172,7 +183,11 @@ def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
         raise Exception(f"No content error processing page {page_number}")
     json_response = json.loads(content)
     end_time = time.time() - start
-    print(f"Processed page {page_number} in {end_time} seconds")
+    in_len = len(input)
+    out_len = len(content)
+    print(
+        f"{MODEL_NAME} processed chunk {page_number} {end_time:.2f}s. Prompt in {in_len} chars -> results {out_len} chars"
+    )
     return (json_response, end_time)
 
 
@@ -221,17 +236,13 @@ def process_step_1_file_and_prompt(
     limit: int | None,
     fast: bool = True,
 ) -> List[PromptIO]:
-    t0 = time.time()
     promptios: list[PromptIO] = []
     pages = read_and_split_file(document_id)
-    print(
-        f"Read {len(pages)} pages from document_id {document_id} in {(time.time() - t0):.2f} seconds"
-    )
+
     t1 = time.time()
 
     if not fast:
         for page_num, page_data in enumerate(pages[:limit]):
-            print(f"Processing page {pages.index(page_data) + 1} of {len(pages)}")
             if page_data == "":
                 continue
             input = prepare_prompt(page_data, prompt_template)
@@ -250,7 +261,6 @@ def process_step_1_file_and_prompt(
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
             for page_num, page_data in enumerate(pages[:limit]):
-                print(f"Processing page {page_num + 1} of {len(pages)}")
                 if page_data == "":
                     continue
 
@@ -352,47 +362,59 @@ def parse_citations(citation_str):
     return elements
 
 
-def filter_tags_with_surroundings(df, tags, surrounding=0):
+def filter_tags_with_surroundings(df, tags, max_surrounding=3):
     """
     Filters a DataFrame to include rows where the tag column value is in the specified set of tags,
-    along with three surrounding tags above and below each match.
-    NOTE: Large of surrounding could result in a large dataframe,
-    likely to be too large for the model to process.
+    with up to max_surrounding tags above and below each match, without exceeding MAX_SEGMENTS_LENGTH.
 
     Parameters:
-    - df: pandas DataFrame with a 'tag' column.
+    - df: pandas DataFrame with 'tag' and 'paragraph' columns.
     - tags: Set of tag values to filter by.
+    - max_surrounding: Maximum number of surrounding rows to include.
+    - MAX_SEGMENTS_LENGTH: Maximum combined length of 'paragraph' and 'tag' texts.
 
     Returns:
     - A filtered pandas DataFrame.
     """
-    # First, find the indices of rows where the tag column value is in the tags set
+    # Find the indices of rows where the tag column value is in the tags set
     matching_indices = df.index[df["tag"].isin(tags)].tolist()
 
-    # Initialize a set to hold all indices to include (for deduplication)
+    total_text_length = 0
     all_indices = set()
 
-    # For each matching index, add it and the three surrounding indices above and below
     for idx in matching_indices:
-        # Calculate ranges, ensuring we don't go out of bounds
-        start_idx = max(idx - surrounding, 0)
-        end_idx = min(
-            idx + surrounding + 1, len(df)
-        )  # +1 because range end is exclusive
+        current_surrounding = 0
+        while current_surrounding <= max_surrounding:
+            # Calculate ranges, ensuring we don't go out of bounds
+            start_idx = max(idx - current_surrounding, 0)
+            end_idx = min(
+                idx + current_surrounding + 1, len(df)
+            )  # +1 because range end is exclusive
 
-        # Add the range of indices to the set
-        all_indices.update(range(start_idx, end_idx))
+            # Temporarily store indices to calculate text length
+            temp_indices = list(range(start_idx, end_idx))
+            temp_df = df.loc[temp_indices, ["tag", "paragraph"]]
+            temp_text_length = (
+                temp_df["paragraph"].str.len().sum() + temp_df["tag"].str.len().sum()
+            )
 
-    # Convert the set of indices back to a sorted list
-    final_indices = sorted(list(all_indices))
+            # Check if adding this surrounding exceeds max text length
+            if total_text_length + temp_text_length <= MAX_SEGMENTS_LENGTH:
+                # Update total text length and indices
+                total_text_length += temp_text_length
+                all_indices.update(temp_indices)
+                current_surrounding += 1
+            else:
+                break  # Stop adding surroundings for this index
 
     # Use the final indices to filter the DataFrame
+    final_indices = sorted(list(all_indices))
     filtered_df = df.loc[final_indices, ["tag", "paragraph"]]
 
     return filtered_df
 
 
-def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
+def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
     """
     Prompt 2 needs to look up the citations column and for each citation string,
     get the relevant quote from the summary column in documents_tags table
@@ -463,7 +485,12 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
         topic_prompt = topic_prompt.replace(
             CITATIONS_PLACEHOLDER, combined_citations_string
         )
-
+        # Check if length of topic_prompt exceeds the maximum length
+        if len(topic_prompt) > MAX_TEXT_LENGTH:
+            multiple = len(topic_prompt) / MAX_TEXT_LENGTH
+            raise ValueError(
+                f"Input length {len(topic_prompt)} exceeds maximum length {MAX_TEXT_LENGTH} by {multiple:.2f}x"
+            )
         prompts.append(topic_prompt)
 
     return prompts
@@ -471,7 +498,6 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
 
 def send_chatgpt_2(index: int, prompt: str) -> tuple[str, float]:
     try:
-        print(f"Sending question {index}...")
         if len(prompt) > MAX_TEXT_LENGTH:
             raise ValueError(
                 f"Input length {len(prompt)} exceeds maximum length {MAX_TEXT_LENGTH}"
@@ -483,7 +509,7 @@ def send_chatgpt_2(index: int, prompt: str) -> tuple[str, float]:
         )
         content = response.choices[0].message.content
         seconds = time.time() - t0
-        print(f"Processed question {index} in {seconds:.2f} seconds")
+        print(f"Processed step 2 question {index} in {seconds:.2f} seconds")
         if content is None:
             print(f"No content error processing question {index}: {response}")
             return "", seconds
@@ -511,11 +537,15 @@ def filter_data_for_sql(df) -> pd.DataFrame:
         filtered_df = df[df[topic].notna()][[topic]]
         print(f"Transformed {len(filtered_df)} rows for {topic}")
         for _, row in filtered_df.iterrows():
-            if not row[topic]:
+            topic_dict = row[topic]
+            if not topic_dict:
+                print(f"WARN: {topic} has no data. Skipping {topic_dict}")
                 continue
-            summary = row[topic]["summary"]
-            citations = row[topic]["citations"]
+            # Check if summary and citations are present in the topic dict
+            summary = topic_dict["summary"]
+            citations = topic_dict["citations"]
             if not summary or summary == "" or not citations or len(citations) == 0:
+                print(f"WARN: {topic} has no summary or citations. Skipping.")
                 continue
             row = {
                 "topic": topic,
@@ -548,7 +578,8 @@ def extract_json_from_code_block(text: str) -> dict:
         except json.JSONDecodeError:
             print("Failed to decode JSON.")
     else:
-        print("No JSON found within code block markers.")
+        print("WARN: No JSON found within code block markers.")
+        print(text)
 
     return {}
 
@@ -565,11 +596,20 @@ def extract_json_data(promptio: PromptIO) -> dict:
 
 
 def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
-    prompts = create_collect_prompts(
+    prompts = create_pass2_prompts(
         prompt_2,
         to_sql_table,
     )
-    print(f"Created {len(prompts)} topic prompts for pass 2.")
+    lengths = list(map(len, prompts))
+    # If any length exceeds the maximum length, raise an error
+    if any(length > MAX_TEXT_LENGTH for length in lengths):
+        print(f"Prompts: {prompts}")
+        raise ValueError(
+            f"Input length {max(lengths)} exceeds maximum length {MAX_TEXT_LENGTH}"
+        )
+    print(f"Created {len(prompts)} questions for pass 2")
+    topics = to_sql_table["topic"].unique().tolist()
+    print(f"Created {len(prompts)} questions for pass 2: {topics}")
     promptios: List[PromptIO] = []
     t0 = time.time()
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -808,9 +848,6 @@ def tagged_text_process(
 
 
 def write_document_tags_to_sql(boxes: list[TagParagraphBox], document_id: int) -> int:
-    print(f"Writing document tags to SQL for document_id {document_id}")
-
-    # Convert TagParagraphBox instances to a list of dicts with the box converted to an array
     records = [
         {
             "tag": box.tag,
@@ -866,14 +903,14 @@ if __name__ == "__main__":
 
     prompt_1 = "ma.pass1.prompt.txt"
     prompt_2 = "ma.pass2.prompt.txt"
-    write_prompt_file_to_sql(prompt_1)
-    write_prompt_file_to_sql(prompt_2)
+    # write_prompt_file_to_sql(prompt_1)
+    # write_prompt_file_to_sql(prompt_2)
 
-    # do_qa(args.pdf, prompt_1, prompt_2, args.limit)
+    do_qa(args.pdf, prompt_1, prompt_2, args.limit)
 
-    for file in os.listdir(args.dir):
-        if file.endswith(".pdf"):
-            print(file)
-            do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
-            print(f"Processed {file}")
-            time.sleep(3)
+    # for file in os.listdir(args.dir):
+    #     if file.endswith(".pdf"):
+    #         print(file)
+    #         do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
+    #         print(f"Processed {file}")
+    #         time.sleep(3)
