@@ -40,7 +40,7 @@ Does this page contain any useful information for each of the Data Definitions? 
 "signing_date": {"summary":"", "citations": []},
 "closing_date": {"summary":"", "citations": []}
 }
-<example_response/>
+</example_response>
 <dataframe>
 {{.dataframe}}
 </dataframe>

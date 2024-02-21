@@ -32,13 +32,11 @@ openai_client = OpenAI(api_key=api_key)
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 # 3.5 turbo is cheap but 16k limit is pretty low
 # MODEL_NAME = "gpt-4-1106-preview"
-MAX_TEXT_LENGTH = 4096 * 4  # 16KB for GPT-3.5 turbo
+# MAX_TEXT_LENGTH = 4096 * 4  # 16KB for GPT-3.5 turbo
 
 # Override
-# MODEL_NAME = "gpt-4-turbo-preview"
-# MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
-
-MAX_SEGMENTS_LENGTH = MAX_TEXT_LENGTH / 2  # Optimizing for how many API calls we make
+MODEL_NAME = "gpt-4-turbo-preview"
+MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
 
 
 def upload_file_new_doc_id(pdf_path: str) -> int:
@@ -104,7 +102,8 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
                 # Remove any leading/trailing whitespace and ignore empty strings, condense whitespace
                 text = " ".join(text.strip().split())
                 if len(text) < MIN_CHARS_IN_RECT:
-                    print(f"Skipping short text: {text}")
+                    if len(text) > 0:
+                        print(f"Skipping short text: '{text}'")
                     continue
                 tag = f"<P{page_num}S{block_idx}/>"
                 segments.append(
@@ -119,25 +118,32 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
     return segments
 
 
-def read_and_split_file(document_id: int) -> List[str]:
+def read_and_split_file(document_id: int, len_prompt: int) -> List[str]:
     """
     Read the file and split the text into pages of MAX_TEXT_LENGTH.
     A page is defined as a string of text with a maximum length of MAX_TEXT_LENGTH.
     It does not mean a page in the traditional book sense.
+    Size of current_chunk cannot exceed MAX_TEXT_LENGTH - len_prompt.
     """
     t0 = time.time()
     chunks = []
     df_tag_paragraph = get_document_tags_paragraphs(document_id)
-    current_page = ""
+    current_chunk = ""
+    max_chunk_length = MAX_TEXT_LENGTH - len_prompt
     for tag, paragraph in df_tag_paragraph.itertuples(index=False):
-        if len(paragraph) + len(current_page) > MAX_SEGMENTS_LENGTH:
-            chunks.append(current_page)
-            current_page = tag + " " + paragraph
+        tagged_paragraph = f" {tag} {paragraph}"
+        if len(tagged_paragraph) > max_chunk_length:
+            raise ValueError(
+                f"Input length {len(tagged_paragraph)} exceeds maximum length {max_chunk_length}"
+            )
+        if len(tagged_paragraph) + len(current_chunk) > max_chunk_length:
+            chunks.append(current_chunk)
+            current_chunk = tagged_paragraph
         else:
-            current_page += " " + (tag if tag else "") + " " + paragraph
+            current_chunk += tagged_paragraph
     # Don't forget to add the last page if it's not empty
-    if current_page:
-        chunks.append(current_page)
+    if current_chunk:
+        chunks.append(current_chunk)
     t1 = time.time() - t0
     print(
         f"Document_id {document_id} was split into {len(chunks)} chunks in {t1:.2f} seconds"
@@ -146,16 +152,18 @@ def read_and_split_file(document_id: int) -> List[str]:
 
 
 # Function to read and prepare the prompt
-def prepare_prompt(page_text: str, prompt_name: str) -> str:
+def prepare_prompt_step1(page_text: str, prompt: str) -> str:
     # with open(prompt_path, "r") as file:
     #     prompt = file.read()
-    prompt = get_prompt_from_sql(prompt_name)
     TO_REPLACE = "{{.dataframe}}"
     # raise error if the prompt does not contain the placeholder
     if TO_REPLACE not in prompt:
-        raise ValueError(f"Prompt file {prompt_name} does not contain {TO_REPLACE}")
+        raise ValueError(f"Prompt {prompt} does not contain {TO_REPLACE}")
     gpt_input = prompt.replace(TO_REPLACE, page_text)
-
+    if len(gpt_input) > MAX_TEXT_LENGTH:
+        raise ValueError(
+            f"Input length {len(gpt_input)} exceeds maximum length {MAX_TEXT_LENGTH}"
+        )
     return gpt_input
 
 
@@ -186,7 +194,7 @@ def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
     in_len = len(input)
     out_len = len(content)
     print(
-        f"{MODEL_NAME} processed chunk {page_number} {end_time:.2f}s. Prompt in {in_len} chars -> results {out_len} chars"
+        f"{MODEL_NAME} chunk {page_number} {end_time:.2f}s {in_len} chars in {out_len} chars out"
     )
     return (json_response, end_time)
 
@@ -232,21 +240,26 @@ class PromptIO(BaseModel):
 # Main function to process the file and prompt
 def process_step_1_file_and_prompt(
     document_id: int,
-    prompt_template: str,
+    prompt_name: str,
     limit: int | None,
     fast: bool = True,
 ) -> List[PromptIO]:
     promptios: list[PromptIO] = []
-    pages = read_and_split_file(document_id)
+    prompt_template = get_prompt_from_sql(prompt_name)
+    pages = read_and_split_file(document_id, len(prompt_template))
 
     t1 = time.time()
 
-    if not fast:
-        for page_num, page_data in enumerate(pages[:limit]):
-            if page_data == "":
-                continue
-            input = prepare_prompt(page_data, prompt_template)
+    api_call_inputs = []
+    for page_num, page_data in enumerate(pages[:limit]):
+        if page_data == "":
+            continue
+        api_call_inputs.append(
+            (page_num, prepare_prompt_step1(page_data, prompt_template))
+        )
 
+    if not fast:
+        for page_num, input in api_call_inputs[:limit]:
             response, seconds = send_to_chatgpt(input, page_num + 1)
             promptios.append(
                 PromptIO(
@@ -258,26 +271,21 @@ def process_step_1_file_and_prompt(
                 )
             )
     else:
+
+        def send_task(page_num, input) -> PromptIO:
+            response, seconds = send_to_chatgpt(input, page_num + 1)
+            return PromptIO(
+                prompt_in=input,
+                prompt_out=json.dumps(response, indent=2),
+                page=page_num,
+                time_taken_seconds=seconds,
+                model=MODEL_NAME,
+            )
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
-            for page_num, page_data in enumerate(pages[:limit]):
-                if page_data == "":
-                    continue
-
-                # Use a task function to encapsulate the call with context
-                def task(p_num=page_num, p_data=page_data) -> PromptIO:
-                    input = prepare_prompt(p_data, prompt_template)
-                    response, seconds = send_to_chatgpt(input, p_num + 1)
-                    return PromptIO(
-                        prompt_in=input,
-                        prompt_out=json.dumps(response, indent=2),
-                        page=p_num,
-                        time_taken_seconds=seconds,
-                        model=MODEL_NAME,
-                    )
-
-                futures.append(executor.submit(task))
-
+            for page_num, input in api_call_inputs[:limit]:
+                futures.append(executor.submit(send_task, page_num, input))
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 promptios.append(result)
@@ -402,7 +410,7 @@ def filter_tags_with_surroundings(df, tags, max_surrounding=3):
             )
 
             # Check if adding this surrounding exceeds max text length
-            if total_text_length + temp_text_length <= MAX_SEGMENTS_LENGTH:
+            if total_text_length + temp_text_length <= MAX_TEXT_LENGTH:
                 # Update total text length and indices
                 total_text_length += temp_text_length
                 all_indices.update(temp_indices)
@@ -927,8 +935,8 @@ if __name__ == "__main__":
 
     prompt_1 = "ma.pass1.prompt.txt"
     prompt_2 = "ma.pass2.prompt.txt"
-    # write_prompt_file_to_sql(prompt_1)
-    # write_prompt_file_to_sql(prompt_2)
+    write_prompt_file_to_sql(prompt_1)
+    write_prompt_file_to_sql(prompt_2)
 
     do_qa(args.pdf, prompt_1, prompt_2, args.limit)
 

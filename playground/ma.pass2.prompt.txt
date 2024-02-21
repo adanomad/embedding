@@ -31,105 +31,105 @@ Deliver results in the following format (json) with a citation of the specific c
     {
         "field_name": "closing_date",
         "value": "YYYY/MM/DD",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "signing_date",
         "value": "YYYY/MM/DD",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "seller_counsel",
         "value": "Law Firm Name, LLP",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "buyer_counsel",
         "value": "Law Firm Name LLP",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "indemnification",
         "value": "No",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "breakup_triggers",
         "value": "Breach; Buyer Failure to Close",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "reverse_termination_fee",
         "value": "$4,250,145",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "closing_conditions",
         "value": "MAE, FCC Approval",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "financing",
         "value": "Debt Financing",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "escrow_coverage",
         "value": "Indemnity; Earnout",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "deal_size",
         "value": "$12,450,250",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "deal_size_type",
         "value": "Equity Value",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "consideration_attributes",
         "value": "Contingent Value Right",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "consideration",
         "value": "Cash and Stock Election",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "rollover",
         "value": "Founder",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
     },
     {
         "field_name": "deal_structure",
         "value": "Asset Sale/Purchase",
-        "citations": ["P4S1", "P4S5"]
+        "citations": ["P4S1", "P4S5"],
         "explanation": "Insert summary here"
-    },
+    }
 ]
-<example_response/>
+</example_response>
 
 Below is the data frame containing information from the agreement. Extract the contract data exactly as you have been instructed.
 
 Here are the citations for reference:
 <citations>
 {{.citations}}
-<citations/>
+</citations>
