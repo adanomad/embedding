@@ -16,7 +16,6 @@ from more_itertools import flatten
 import fitz  # PyMuPDF
 
 
-MAX_TEXT_LENGTH = 4096 * 4  # 16KB
 MIN_CHARS = 120  # Minimum characters for a sentence
 MAX_CHARS = 360  # Maximum characters for a sentence
 
@@ -31,7 +30,13 @@ if not api_key:
 openai_client = OpenAI(api_key=api_key)
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
-MODEL_NAME = "gpt-4-1106-preview"
+# 3.5 turbo is cheap but 16k limit is pretty low
+# MODEL_NAME = "gpt-4-1106-preview"
+# MAX_TEXT_LENGTH = 4096 * 4  # 16KB for GPT-3.5 turbo
+
+# Override
+MODEL_NAME = "gpt-4-turbo-preview"
+MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
 
 
 def upload_file_new_doc_id(pdf_path: str) -> int:
@@ -88,7 +93,6 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             blocks = page.get_text("blocks")
-            print(f"Processing page {page_num}, bounding boxes {len(blocks)}...")
             blocks.sort(
                 key=lambda block: (block[1], block[0])
             )  # Sort blocks by y0, x0 (top to bottom, left to right)
@@ -104,119 +108,8 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
                     )
                 )
 
-    print(f"Text extracted from {pdf_path}")
+    print(f"Text extracted from {pdf_path}, bounding boxes {len(segments)}.")
     return segments
-
-
-def extract_segments(text: str) -> list[str]:
-    patterns = [
-        # Match Roman numerals in parentheses. This pattern is simplified and might not cover all edge cases.
-        r"\((?=[MDCLXVI])(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))\)",
-        # Alphabetical items in parentheses (unchanged, as it suits the requirement)
-        r"\([a-z]\)",
-        # Adding a pattern for semicolons as a potential separator for items within the same sentence
-    ]
-
-    segment_indices = []
-    for pattern in patterns:
-        # Find all matches of the pattern in the text
-        matches = re.finditer(pattern, text, re.IGNORECASE)
-        for match in matches:
-            # Store the match position (start index)
-            segment_indices.append(match.start())
-
-    # Sort indices and extract segments based on these indices
-    segment_indices = sorted(list(set(segment_indices)))  # Remove duplicates and sort
-    segments = []
-    if not segment_indices:
-        return [text]
-    for i in range(len(segment_indices) - 1):
-        # Extract text segments based on the indices
-        segments.append(text[segment_indices[i] : segment_indices[i + 1]])
-
-    # Add the final segment if not captured
-    if segment_indices:
-        segments.append(text[segment_indices[-1] :])
-
-    return segments
-
-
-def inject_indices_simple(indexed_sentences: list[str], page: int) -> str:
-    # Initialize an empty string to hold the result
-    combined_with_indices = ""
-
-    # Loop through the list of indexed sentences
-    for i, sentence in enumerate(indexed_sentences, start=1):
-        # Append the sentence with its preceding index
-        # Assuming <i> is the tag before the sentence and <i+1> is the tag after the sentence
-        # For the last sentence, there's no next sentence, so just use <i>
-        combined_with_indices += f"<PAGE{page}SEGMENT{i}/>{sentence}\n"
-
-    return combined_with_indices
-
-
-def normalize_sentence_lengths(
-    sentences: list[str], min_chars: int, max_chars: int
-) -> list[str]:
-    """
-    Adjust sentences to ensure each is within the specified minimum and maximum character lengths.
-    Sentences shorter than min_chars are merged with subsequent sentences, and sentences longer
-    than max_chars are split at suitable points.
-    """
-
-    processed_sentences = []
-    i = 0
-
-    # First pass: merge short sentences
-    while i < len(sentences):
-        current_sentence = sentences[i]
-        if len(current_sentence) < min_chars and i + 1 < len(sentences):
-            # Ensure not to exceed list bounds
-            next_sentence = sentences[i + 1]
-            merged_sentence = current_sentence + " " + next_sentence
-            # Check if the merged sentence still needs to be split (if it exceeds max_chars)
-            if len(merged_sentence) <= max_chars or max_chars == -1:
-                processed_sentences.append(merged_sentence)
-                i += 2  # Skip the next sentence as it's merged
-            else:
-                # If merging results in a sentence longer than max_chars, don't merge
-                processed_sentences.append(current_sentence)
-                i += 1  # Only increment by 1 to re-evaluate next_sentence in the next loop
-        else:
-            processed_sentences.append(current_sentence)
-            i += 1
-
-    # Second pass: split long sentences
-    final_sentences = []
-    for sentence in processed_sentences:
-        if len(sentence) > max_chars and max_chars != -1:
-            split_index = max(
-                sentence.rfind(",", 0, max_chars), sentence.rfind(".", 0, max_chars)
-            )
-            if split_index != -1:
-                # Split the sentence at the last comma/period before max_chars
-                first_part = sentence[: split_index + 1]
-                second_part = sentence[split_index + 2 :].strip()
-                final_sentences.extend([first_part, second_part])
-            else:
-                # No suitable split point, append the sentence as is
-                final_sentences.append(sentence)
-        else:
-            # Sentence is within the acceptable length range
-            final_sentences.append(sentence)
-
-    return final_sentences
-
-
-def inject_indices(sentences: list[str], page: int) -> str:
-    """Inject indices into sentences, merging short ones and splitting long ones."""
-    final_sentences = normalize_sentence_lengths(sentences, MIN_CHARS, MAX_CHARS)
-
-    combined_with_indices = ""
-    for index, sentence in enumerate(final_sentences):
-        combined_with_indices += f"<P{page}S{index}/>{sentence}\n"
-
-    return combined_with_indices.strip()
 
 
 def read_and_split_file(document_id: int) -> List[str]:
@@ -229,7 +122,7 @@ def read_and_split_file(document_id: int) -> List[str]:
     df_tag_paragraph = get_document_tags_paragraphs(document_id)
     current_page = ""
     for tag, paragraph in df_tag_paragraph.itertuples(index=False):
-        if len(paragraph) + len(current_page) > MAX_TEXT_LENGTH:
+        if len(paragraph) + len(current_page) > MAX_TEXT_LENGTH / 8:
             pages.append(current_page)
             current_page = tag + " " + paragraph
         else:
@@ -241,7 +134,7 @@ def read_and_split_file(document_id: int) -> List[str]:
 
 
 # Function to read and prepare the prompt
-def prepare_prompt(page_text: str, prompt_name: str, page_number: int) -> str:
+def prepare_prompt(page_text: str, prompt_name: str) -> str:
     # with open(prompt_path, "r") as file:
     #     prompt = file.read()
     prompt = get_prompt_from_sql(prompt_name)
@@ -256,6 +149,10 @@ def prepare_prompt(page_text: str, prompt_name: str, page_number: int) -> str:
 
 def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
     print(f"Sending to {MODEL_NAME} for page {page_number}...")
+    if len(input) > MAX_TEXT_LENGTH:
+        raise ValueError(
+            f"Input length {len(input)} exceeds maximum length {MAX_TEXT_LENGTH}"
+        )
     start = time.time()
     try:
         response = openai.chat.completions.create(
@@ -337,7 +234,7 @@ def process_step_1_file_and_prompt(
             print(f"Processing page {pages.index(page_data) + 1} of {len(pages)}")
             if page_data == "":
                 continue
-            input = prepare_prompt(page_data, prompt_template, page_num)
+            input = prepare_prompt(page_data, prompt_template)
 
             response, seconds = send_to_chatgpt(input, page_num + 1)
             promptios.append(
@@ -359,7 +256,7 @@ def process_step_1_file_and_prompt(
 
                 # Use a task function to encapsulate the call with context
                 def task(p_num=page_num, p_data=page_data) -> PromptIO:
-                    input = prepare_prompt(p_data, prompt_template, p_num)
+                    input = prepare_prompt(p_data, prompt_template)
                     response, seconds = send_to_chatgpt(input, p_num + 1)
                     return PromptIO(
                         prompt_in=input,
@@ -455,10 +352,12 @@ def parse_citations(citation_str):
     return elements
 
 
-def filter_tags_with_surroundings(df, tags, surrounding=8):
+def filter_tags_with_surroundings(df, tags, surrounding=0):
     """
     Filters a DataFrame to include rows where the tag column value is in the specified set of tags,
     along with three surrounding tags above and below each match.
+    NOTE: Large of surrounding could result in a large dataframe,
+    likely to be too large for the model to process.
 
     Parameters:
     - df: pandas DataFrame with a 'tag' column.
@@ -570,9 +469,13 @@ def create_collect_prompts(template_path: str, responses: pd.DataFrame) -> List[
     return prompts
 
 
-def part2_chatgpt(index: int, prompt: str) -> tuple[str, float]:
+def send_chatgpt_2(index: int, prompt: str) -> tuple[str, float]:
     try:
         print(f"Sending question {index}...")
+        if len(prompt) > MAX_TEXT_LENGTH:
+            raise ValueError(
+                f"Input length {len(prompt)} exceeds maximum length {MAX_TEXT_LENGTH}"
+            )
         t0 = time.time()
         response = openai.chat.completions.create(
             model=MODEL_NAME,
@@ -612,7 +515,7 @@ def filter_data_for_sql(df) -> pd.DataFrame:
                 continue
             summary = row[topic]["summary"]
             citations = row[topic]["citations"]
-            if summary == "" or len(citations) == 0:
+            if not summary or summary == "" or not citations or len(citations) == 0:
                 continue
             row = {
                 "topic": topic,
@@ -651,7 +554,7 @@ def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
 
             # Use a task function to encapsulate the call with context
             def task(p_num=prompt_num, p_data=prompt_input) -> PromptIO:
-                response, seconds = part2_chatgpt(p_num + 1, p_data)
+                response, seconds = send_chatgpt_2(p_num + 1, p_data)
                 return PromptIO(
                     prompt_in=prompt_input,
                     prompt_out=response,
@@ -842,7 +745,7 @@ if __name__ == "__main__":
         type=str,
         default="../data/m&a",
     )
-    parser.add_argument("--limit", type=int, default=1)
+    parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
     prompt_1 = "ma.pass1.prompt.txt"
@@ -850,11 +753,11 @@ if __name__ == "__main__":
     write_prompt_file_to_sql(prompt_1)
     write_prompt_file_to_sql(prompt_2)
 
-    do_qa(args.pdf, prompt_1, prompt_2, args.limit)
+    # do_qa(args.pdf, prompt_1, prompt_2, args.limit)
 
-    # for file in os.listdir(args.dir):
-    #     if file.endswith(".pdf"):
-    #         print(file)
-    #         do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
-    #         print(f"Processed {file}")
-    #         time.sleep(3)
+    for file in os.listdir(args.dir):
+        if file.endswith(".pdf"):
+            print(file)
+            do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
+            print(f"Processed {file}")
+            time.sleep(3)
