@@ -449,12 +449,7 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
     """
     # Read the template_path file
     template = read_prompt_from_sql(template_path)
-    DATAFRAME_PLACEHOLDER = "{{.dataframe}}"
     CITATIONS_PLACEHOLDER = "{{.citations}}"
-    if DATAFRAME_PLACEHOLDER not in template:
-        raise ValueError(
-            f"Prompt file {template} does not contain {DATAFRAME_PLACEHOLDER}"
-        )
     if CITATIONS_PLACEHOLDER not in template:
         raise ValueError(
             f"Prompt file {template} does not contain {CITATIONS_PLACEHOLDER}"
@@ -486,14 +481,7 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
         )
 
         filtered_df = responses[responses["topic"] == topic]
-        dataframe_texts = (
-            filtered_df[["citations", "summary"]]
-            .apply(lambda x: f"{x['citations']} {x['summary']}", axis=1)
-            .to_list()
-        )
-        topic_prompt = topic_prompt.replace(
-            DATAFRAME_PLACEHOLDER, "\n".join(dataframe_texts)
-        )
+
         print(f"Topic {topic}: {len(filtered_df)} rows")
         # Get relevant tags from documents_tags
         # Check if it's a list of strings or a string

@@ -129,9 +129,7 @@ Deliver results in the following format (json) with a citation of the specific c
 <example_response/>
 
 Below is the data frame containing information from the agreement. Extract the contract data exactly as you have been instructed.
-<dataframe>
-{{.dataframe}}
-<dataframe/>
+
 Here are the citations for reference:
 <citations>
 {{.citations}}
