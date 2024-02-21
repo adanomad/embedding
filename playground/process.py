@@ -12,7 +12,6 @@ import pandas as pd
 from pydantic import BaseModel
 from typing import List, Dict
 from sqlalchemy import create_engine, text
-import ast
 from more_itertools import flatten
 import fitz  # PyMuPDF
 
@@ -31,8 +30,8 @@ if not api_key:
     raise ValueError("No OpenAI API key found in environment variables")
 openai_client = OpenAI(api_key=api_key)
 
-# MODEL_NAME = "gpt-4-1106-preview"
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+MODEL_NAME = "gpt-4-1106-preview"
 
 
 def upload_file_new_doc_id(pdf_path: str) -> int:
@@ -42,7 +41,7 @@ def upload_file_new_doc_id(pdf_path: str) -> int:
         transaction = conn.begin()  # Start a new transaction
         query = text("SELECT MAX(id) FROM experiments.documents;")
         result = conn.execute(query).fetchone()
-        doc_id = result[0] if result[0] is not None else 0
+        doc_id = result[0] if result[0] is not None else 0  # type: ignore
         new_doc_id = doc_id + 1
 
         # Read the PDF file as binary data
@@ -85,7 +84,7 @@ def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
     """
     segments: list[TagParagraphBox] = []
 
-    with fitz.open(pdf_path) as doc:
+    with fitz.open(pdf_path) as doc:  # type: ignore
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             blocks = page.get_text("blocks")
@@ -703,13 +702,36 @@ def get_prompt_from_sql(prompt_name: str) -> str:
     )
     with engine.connect() as conn:
         result = conn.execute(text(query))
-        return result.scalar()  # type: ignore
+        prompt = result.scalar()
+        if prompt is None:
+            raise ValueError(f"No prompt found for {prompt_name}")
+        return prompt
 
 
-def write_prompt_file_to_sql(prompt_name: str):
-    content = open(prompt_name, "r").read()
-    df = pd.DataFrame([{"prompt_name": prompt_name, "content": content}])
-    df.to_sql("prompts", engine, if_exists="append", schema="experiments", index=False)
+def write_prompt_file_to_sql(prompt_path: str):
+    prompt_name = os.path.basename(prompt_path)
+    with open(
+        prompt_path, "r"
+    ) as file:  # Fixed path issue and ensure file is properly closed
+        content = file.read()
+
+    # SQL command for upsert (insert or update on conflict)
+    upsert_sql = text(
+        """
+        INSERT INTO experiments.prompts (prompt_name, content, updated_at) 
+        VALUES (:prompt_name, :content, NOW()) 
+        ON CONFLICT (prompt_name) DO UPDATE 
+        SET content = EXCLUDED.content;
+    """
+    )
+
+    # Execute the upsert command
+    with engine.connect() as conn:
+        conn.execute(upsert_sql, {"prompt_name": prompt_name, "content": content})
+        conn.commit()
+
+    # Check it can be read
+    get_prompt_from_sql(prompt_name)
 
 
 def read_pass1_results_from_sql(document_id: int) -> pd.DataFrame:
@@ -796,7 +818,15 @@ def read_prompt_from_sql(prompt_name: str) -> str:
     )
     with engine.connect() as conn:
         result = conn.execute(text(query))
-        return result.scalar()
+        return result.scalar()  # type: ignore
+
+
+def do_qa(pdf_path: str, prompt_1: str, prompt_2: str, limit: int | None = None):
+    document_text_with_tags = pdf2text_inject_tags(pdf_path)
+    document_id = upload_file_new_doc_id(pdf_path)
+    print(f"document_id: {document_id}")
+    write_document_tags_to_sql(document_text_with_tags, document_id)
+    tagged_text_process(document_id, prompt_1, prompt_2, limit)
 
 
 if __name__ == "__main__":
@@ -804,22 +834,27 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pdf",
         type=str,
-        default="../data/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf",
-        # default="../data/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf",
+        default="../data/m&a/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf",
+        # default="../data/m&a/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf",
+    )
+    parser.add_argument(
+        "--dir",
+        type=str,
+        default="../data/m&a",
     )
     parser.add_argument("--limit", type=int, default=1)
     args = parser.parse_args()
 
-    # # Write the prompt to sql if not exist (temp here)
-    # write_prompt_file_to_sql("credit.pass1.prompt.txt")
-    # write_prompt_file_to_sql("credit.pass2.prompt.txt")
+    prompt_1 = "ma.pass1.prompt.txt"
+    prompt_2 = "ma.pass2.prompt.txt"
+    write_prompt_file_to_sql(prompt_1)
+    write_prompt_file_to_sql(prompt_2)
 
-    # Extract the document text and inject tags
-    document_text_with_tags = pdf2text_inject_tags(args.pdf)
-    document_id = upload_file_new_doc_id(args.pdf)
-    print(f"document_id: {document_id}")
-    write_document_tags_to_sql(document_text_with_tags, document_id)
+    do_qa(args.pdf, prompt_1, prompt_2, args.limit)
 
-    tagged_text_process(
-        document_id, "credit.pass1.prompt.txt", "credit.pass2.prompt.txt", args.limit
-    )
+    # for file in os.listdir(args.dir):
+    #     if file.endswith(".pdf"):
+    #         print(file)
+    #         do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
+    #         print(f"Processed {file}")
+    #         time.sleep(3)
