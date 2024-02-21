@@ -534,8 +534,7 @@ def extract_json_data(promptio: PromptIO) -> dict:
         data = json.loads(joined)
     else:
         data = json.loads(file_content)
-
-    return data
+    return fix_malformed_json(data)
 
 
 def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
@@ -642,6 +641,48 @@ def read_pass1_results_from_sql(document_id: int) -> pd.DataFrame:
         f"SELECT * FROM experiments.pass1_results WHERE document_id = '{document_id}'"
     )
     return pd.read_sql_query(query, engine)
+
+
+def fix_malformed_json(json_obj) -> dict:
+    """
+    Detects and fixes malformed JSON structure for specific keys.
+
+    Parameters:
+    - json_obj: A dictionary representing the JSON object.
+
+    Returns:
+    - A dictionary with the corrected JSON structure.
+    """
+    # Define the expected correct structure
+    correct_keys = ["field_name", "value", "citations", "explanation"]
+
+    # Check if json_obj is missing any of the correct keys and has unexpected keys
+    if (
+        not all(key in json_obj for key in correct_keys)
+        and "deal_structure" in json_obj
+    ):
+        # Fix the structure
+        fixed_json = {
+            "field_name": "deal_structure",
+            "value": json_obj.pop(
+                "deal_structure"
+            ),  # Move the value and remove the key
+            "citations": json_obj.get("citations", []),
+            "explanation": json_obj.get("explanation", ""),
+        }
+        return fixed_json
+    # If json_obj already has the correct structure or doesn't need fixing
+    return json_obj
+
+
+# # Example usage
+# malformed_json = {
+#     'deal_structure': 'Asset and Stock Sale/Purchase',
+#     'citations': ['<P5S6/>', '<P30S34/>', '<P37S4/>', '<P37S5/>', '<P37S6/>', '<P68S1/>', '<P110S3/>', '<P110S4/>', '<P128S0/>'],
+#     'explanation': "The transaction contains elements of both an asset sale/purchase and a stock sale/purchase. Citations indicate the sale and purchase of equity interests (which aligns with a stock sale/purchase), such as where sellers desire to sell and purchasers desire to acquire transferred equity interests. Other citations mention the structure as an asset sale/purchase, with references to treating the sale for tax purposes as an asset purchase and a step-up in tax basis for all assets involved. The combination of these factors and specific references to the transaction's structure lead to the conclusion that this is an Asset and Stock Sale/Purchase."
+# }
+# fixed_json = fix_malformed_json(malformed_json)
+# print(json.dumps(fixed_json, indent=2))
 
 
 def tagged_text_process(
