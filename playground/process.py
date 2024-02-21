@@ -685,6 +685,42 @@ def fix_malformed_json(json_obj) -> dict:
 # print(json.dumps(fixed_json, indent=2))
 
 
+def fix_df_columns(df, expected_columns):
+    """
+    Detects unexpected columns and reformats the DataFrame to match the expected structure.
+
+    Parameters:
+    - df: The DataFrame to be fixed.
+    - expected_columns: A set of expected column names.
+
+    Returns:
+    - The fixed DataFrame with the expected structure.
+    """
+    # Detect columns that are not expected
+    unexpected_columns = set(df.columns) - expected_columns
+
+    # Handle unexpected columns case by case
+    for col in unexpected_columns:
+        if col == "deal_size_type":
+            # Assuming 'deal_size_type' should be incorporated into 'field_name' and 'value'
+            # Check if 'field_name' column exists, if not create it
+            if "field_name" not in df.columns:
+                df["field_name"] = None
+            # Update 'field_name' and 'value' based on 'deal_size_type' content
+            df.loc[df["deal_size_type"].notna(), "field_name"] = "deal_structure"
+            df.loc[df["deal_size_type"].notna(), "value"] = df["deal_size_type"]
+
+            # Drop the 'deal_size_type' column as it's now redundant
+            df.drop(columns=["deal_size_type"], inplace=True)
+
+    # Ensure all expected columns are present, add if missing
+    for col in expected_columns:
+        if col not in df.columns:
+            df[col] = None
+
+    return df
+
+
 def tagged_text_process(
     document_id: int,
     prompt_name_1: str,
@@ -724,6 +760,18 @@ def tagged_text_process(
     df_pass2_output = pd.DataFrame(responses)
     df_pass2_output["document_id"] = document_id
     df_pass2_output["model"] = MODEL_NAME
+    # Check the columns are matching the expected columns
+    expected_columns = set(
+        ["field_name", "value", "citations", "explanation", "document_id", "model"]
+    )
+    diff_columns = set(df_pass2_output.columns) - expected_columns
+    if diff_columns:
+        print(f"WARN: Expected columns {expected_columns} not found in df_pass2_output")
+        # Print the columns that are not in the expected columns
+        print(f"Columns not in expected columns: {diff_columns}")
+        # Try to fix it by formatting the columns
+        df_pass2_output = fix_df_columns(df_pass2_output, expected_columns)
+
     df_pass2_output.to_sql(
         "pass2_results", engine, if_exists="append", schema="experiments"
     )
