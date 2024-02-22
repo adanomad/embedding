@@ -31,7 +31,7 @@ I am looking for your responses in a json, about the topics in data_definitions.
 "financing": {"summary":"", "citations": []},
 "closing_conditions": {"summary":"", "citations": []},
 "reverse_termination_fee": {"summary":"", "citations": []},
-"breakup_triggers": {"summary":"", "citations": []},
+"reverse_termination_fee_triggers": {"summary":"", "citations": []},
 "indemnification": {"summary":"", "citations": []},
 "buyer_counsel": {"summary":"", "citations": []},
 "seller_counsel": {"summary":"", "citations": []},
@@ -46,3 +46,5 @@ Look at the dataframe for information related to the data definitions.
 <dataframe>
 {{.dataframe}}
 </dataframe>
+
+You must deliver your response in the JSON format that I have provided you with. Do not add any text or characters before or after the JSON output.

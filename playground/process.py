@@ -1,4 +1,5 @@
 import argparse
+import ast
 import os
 import re
 import time
@@ -79,6 +80,7 @@ class TagParagraphBox(BaseModel):
     tag: str
     paragraph: str
     box: Box
+    embedding: List[float] = []
 
 
 def pdf2text_inject_tags(pdf_path) -> list[TagParagraphBox]:
@@ -453,7 +455,7 @@ def filter_json_by_field_value(json_data, field_name, value):
     return filtered_list
 
 
-def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
+def create_step2_prompts(template_path: str, responses: pd.DataFrame) -> List[str]:
     """
     Prompt 2 needs to look up the citations column and for each citation string,
     get the relevant quote from the summary column in documents_tags table
@@ -602,6 +604,7 @@ def merge_duplicate_topics(df):
 def filter_data_for_sql(df) -> pd.DataFrame:
     """Filter data to prepare rows for SQL insertion."""
     to_sql_table = []
+    skipped = []
     for topic in df.columns:
         filtered_df = df[df[topic].notna()][[topic]]
         print(f"Transformed {len(filtered_df)} rows for {topic}")
@@ -611,10 +614,18 @@ def filter_data_for_sql(df) -> pd.DataFrame:
                 print(f"WARN: {topic} has no data. Skipping {topic_dict}")
                 continue
             # Check if summary and citations are present in the topic dict
-            summary = topic_dict["summary"]
-            citations = topic_dict["citations"]
+            try:
+                summary = topic_dict["summary"]
+            except Exception as e:
+                print(f"WARN: {topic} {topic_dict}: {e}")
+                summary = ""
+            try:
+                citations = topic_dict["citations"]
+            except Exception as e:
+                print(f"WARN: {topic} {topic_dict}: {e}")
+                citations = []
             if not summary or summary == "" or not citations or len(citations) == 0:
-                print(f"WARN: {topic} has no summary or citations. Skipping.")
+                skipped.append(topic)
                 continue
             row = {
                 "topic": topic,
@@ -624,7 +635,7 @@ def filter_data_for_sql(df) -> pd.DataFrame:
             to_sql_table.append(row)
     filtered_df = pd.DataFrame(to_sql_table)
     merged_df = merge_duplicate_topics(filtered_df)
-
+    print(f"WARN: Skipped {len(skipped)} topics: {skipped}")
     return merged_df
 
 
@@ -644,8 +655,11 @@ def extract_json_from_code_block(text: str) -> dict:
 
     if match:
         text = match.group(1)
-
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"Error extracting JSON from code block: {str(e)}")
+        return ast.literal_eval(text)
 
 
 def extract_json_data(promptio: PromptIO) -> dict:
@@ -660,7 +674,7 @@ def extract_json_data(promptio: PromptIO) -> dict:
 
 
 def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
-    prompts = create_pass2_prompts(
+    prompts = create_step2_prompts(
         prompt_2,
         to_sql_table,
     )
@@ -913,6 +927,7 @@ def write_document_tags_to_sql(boxes: list[TagParagraphBox], document_id: int) -
             "paragraph": box.paragraph,
             "bounding_box": [box.box.x0, box.box.y0, box.box.x1, box.box.y1],
             "document_id": document_id,
+            "embedding": box.embedding,
         }
         for box in boxes
     ]
@@ -936,11 +951,107 @@ def read_prompt_from_sql(prompt_name: str) -> str:
         return result.scalar()  # type: ignore
 
 
+def get_closest_tags(engine, paragraph: str, top_n: int = 5) -> pd.DataFrame:
+    """
+    Retrieves the closest 'top_n' tags for a given paragraph of text based on vector embeddings.
+
+    Parameters:
+    - engine: SQLAlchemy engine connected to your PostgreSQL database.
+    - paragraph: The input paragraph text for which to find the closest tags.
+    - top_n: The number of closest tags to retrieve.
+
+    Returns:
+    - A DataFrame containing the closest tags and their associated information.
+    """
+    # Calculate the embedding for the input paragraph
+    paragraph_embedding = get_text_vector(paragraph)
+
+    # Convert the embedding list to a string format for SQL query compatibility
+    # This might need adjustments based on how embeddings are stored/retrieved in your specific setup
+    embedding_str = ",".join(map(str, paragraph_embedding))
+
+    # SQL query to retrieve the closest tags based on the cosine similarity or another metric
+    # The specifics of this query will depend on how you've implemented vector operations in PostgreSQL
+    # The following is a pseudocode placeholder for illustrative purposes
+    query = f"""
+    SELECT tag, paragraph, bounding_box, document_id, embedding,
+    cosine_similarity_function(embedding, ARRAY[{embedding_str}]) AS similarity
+    FROM experiments.documents_tags
+    ORDER BY similarity DESC
+    LIMIT {top_n}
+    """
+
+    # Execute the query and return the results
+    df_closest_tags = pd.read_sql(query, engine)
+
+    return df_closest_tags
+
+
+def get_text_vector(text: str) -> list:
+    """
+    Takes a string and returns a vector representation using OpenAI's API.
+
+    Parameters:
+    - text: The input string to be converted into a vector.
+
+    Returns:
+    - A list representing the vector of the input text.
+    """
+    try:
+        # You might need to specify the model you want to use for embeddings.
+        # For example, "text-embedding-ada-002" is one of the models available for embeddings.
+        response = openai_client.embeddings.create(
+            model="text-embedding-ada-002", input=text
+        )
+        vector = response.data[0].embedding
+        return vector
+    except Exception as e:
+        print(f"An error occurred while fetching the vector: {e}")
+        return []
+
+
+def fill_in_embeddings(boxes: list[TagParagraphBox]):
+    """
+    Fills in the embeddings for each paragraph in the list of TagParagraphBox objects.
+
+    Parameters:
+    - boxes: A list of TagParagraphBox objects representing the paragraphs to be embedded.
+
+    Returns:
+    - None
+    """
+    # # MOCK IMPLEMENTATION for now
+    # for box in boxes:
+    #     if box.paragraph == "":
+    #         continue
+    #     box.embedding = [0.0] * 1536
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for box in boxes:
+            if box.paragraph == "":
+                continue
+
+            # Use a task function to encapsulate the call with context
+            def task(box_task) -> TagParagraphBox:
+                embedding = get_text_vector(box_task.paragraph)
+                box_task.embedding = embedding
+                return box_task
+
+            futures.append(executor.submit(task, box))
+
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            # Update the original list with the updated object
+            boxes[boxes.index(result)] = result
+
+
 def do_qa(pdf_path: str, prompt_1: str, prompt_2: str, limit: int | None = None):
     t0 = time.time()
     document_text_with_tags = pdf2text_inject_tags(pdf_path)
     document_id = upload_file_new_doc_id(pdf_path)
     print(f"document_id: {document_id}")
+    fill_in_embeddings(document_text_with_tags)
     write_document_tags_to_sql(document_text_with_tags, document_id)
     tagged_text_process(document_id, prompt_1, prompt_2, limit)
     t1 = time.time() - t0
@@ -968,11 +1079,11 @@ if __name__ == "__main__":
     write_prompt_file_to_sql(prompt_1)
     write_prompt_file_to_sql(prompt_2)
 
-    do_qa(args.pdf, prompt_1, prompt_2, args.limit)
+    # do_qa(args.pdf, prompt_1, prompt_2, args.limit)
 
-    # for file in os.listdir(args.dir):
-    #     if file.endswith(".pdf"):
-    #         print(file)
-    #         do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
-    #         print(f"Processed {file}")
-    #         time.sleep(3)
+    for file in os.listdir(args.dir):
+        if file.endswith(".pdf"):
+            print(file)
+            do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
+            print(f"Processed {file}")
+            time.sleep(3)

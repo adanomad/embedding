@@ -127,3 +127,5 @@ Here are the citations containing related information. Extract the contract data
 <citations>
 {{.citations}}
 </citations>
+
+You must deliver your response in the JSON format that I have provided you with. Do not add any text or characters before or after the JSON output.
