@@ -529,6 +529,13 @@ def create_step2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
         combined_citations_string = "\n".join(tag_paragraph_list)
         combined_citations_string += "\n" + combined_summaries
 
+        # Use embeddings to find relevant tags
+        # Combine the paragraphs from closest tags
+        closest_tags_df = get_closest_tags(document_id, combined_summaries)
+        combined_summaries += "\n" + closest_tags_df["tag"].str.cat(
+            closest_tags_df["paragraph"], sep=" "
+        )
+
         topic_prompt = topic_prompt.replace(
             CITATIONS_PLACEHOLDER, combined_citations_string
         )
@@ -951,7 +958,7 @@ def read_prompt_from_sql(prompt_name: str) -> str:
         return result.scalar()  # type: ignore
 
 
-def get_closest_tags(engine, paragraph: str, top_n: int = 5) -> pd.DataFrame:
+def get_closest_tags(document_id: int, paragraph: str, top_n: int = 5) -> pd.DataFrame:
     """
     Retrieves the closest 'top_n' tags for a given paragraph of text based on vector embeddings.
 
@@ -974,10 +981,10 @@ def get_closest_tags(engine, paragraph: str, top_n: int = 5) -> pd.DataFrame:
     # The specifics of this query will depend on how you've implemented vector operations in PostgreSQL
     # The following is a pseudocode placeholder for illustrative purposes
     query = f"""
-    SELECT tag, paragraph, bounding_box, document_id, embedding,
-    cosine_similarity_function(embedding, ARRAY[{embedding_str}]) AS similarity
+    SELECT tag, paragraph
     FROM experiments.documents_tags
-    ORDER BY similarity DESC
+    WHERE document_id = '{document_id}'
+    ORDER BY embedding <-> '[{embedding_str}]'
     LIMIT {top_n}
     """
 
@@ -1025,7 +1032,7 @@ def fill_in_embeddings(boxes: list[TagParagraphBox]):
     #     if box.paragraph == "":
     #         continue
     #     box.embedding = [0.0] * 1536
-
+    t0 = time.time()
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
         for box in boxes:
@@ -1063,7 +1070,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pdf",
         type=str,
-        default="../data/m&a/Arco_Platform_Ltd_Investment_Group_477m_Announce_20221130_merger_agree_20230811.pdf",
+        default="../data/m&a/The_Necessity_Retail_REIT_Inc_Global_Net_Lease_Inc_933m_Announce_20230523_merger_agree_20230526.pdf",
         # default="../data/m&a/Lumen_Incumbent_Local_Exchange_Carrier_Business_Apollo_Global_Management_LLC_7_500m_Announce_20210803_merger_agree_20210804.pdf",
     )
     parser.add_argument(
@@ -1079,11 +1086,11 @@ if __name__ == "__main__":
     write_prompt_file_to_sql(prompt_1)
     write_prompt_file_to_sql(prompt_2)
 
-    # do_qa(args.pdf, prompt_1, prompt_2, args.limit)
+    do_qa(args.pdf, prompt_1, prompt_2, args.limit)
 
-    for file in os.listdir(args.dir):
-        if file.endswith(".pdf"):
-            print(file)
-            do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
-            print(f"Processed {file}")
-            time.sleep(3)
+    # for file in os.listdir(args.dir):
+    #     if file.endswith(".pdf"):
+    #         print(file)
+    #         do_qa(os.path.join(args.dir, file), prompt_1, prompt_2, args.limit)
+    #         print(f"Processed {file}")
+    #         time.sleep(3)
