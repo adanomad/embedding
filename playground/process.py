@@ -36,8 +36,8 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 
 # Override
 MODEL_NAME = "gpt-4-turbo-preview"
-MAX_TEXT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
-MAX_TEXT_LENGTH = 4096 * 8 * 2  # 64KB might work better
+MAX_PROMPT_LENGTH = 4096 * 8 * 4  # 128KB for GPT-4 turbo
+MAX_PROMPT_LENGTH = 4096 * 8 * 2  # 64KB might work better
 
 
 def upload_file_new_doc_id(pdf_path: str) -> int:
@@ -130,7 +130,7 @@ def read_and_split_file(document_id: int, len_prompt: int) -> List[str]:
     chunks = []
     df_tag_paragraph = get_document_tags_paragraphs(document_id)
     current_chunk = ""
-    max_chunk_length = MAX_TEXT_LENGTH - len_prompt
+    max_chunk_length = MAX_PROMPT_LENGTH - len_prompt
     for tag, paragraph in df_tag_paragraph.itertuples(index=False):
         tagged_paragraph = f" {tag} {paragraph}"
         if len(tagged_paragraph) > max_chunk_length:
@@ -161,17 +161,17 @@ def prepare_prompt_step1(page_text: str, prompt: str) -> str:
     if TO_REPLACE not in prompt:
         raise ValueError(f"Prompt {prompt} does not contain {TO_REPLACE}")
     gpt_input = prompt.replace(TO_REPLACE, page_text)
-    if len(gpt_input) > MAX_TEXT_LENGTH:
+    if len(gpt_input) > MAX_PROMPT_LENGTH:
         raise ValueError(
-            f"Input length {len(gpt_input)} exceeds maximum length {MAX_TEXT_LENGTH}"
+            f"Input length {len(gpt_input)} exceeds maximum length {MAX_PROMPT_LENGTH}"
         )
     return gpt_input
 
 
 def send_to_chatgpt(input: str, page_number: int) -> tuple[dict, float]:
-    if len(input) > MAX_TEXT_LENGTH:
+    if len(input) > MAX_PROMPT_LENGTH:
         raise ValueError(
-            f"Input length {len(input)} exceeds maximum length {MAX_TEXT_LENGTH}"
+            f"Input length {len(input)} exceeds maximum length {MAX_PROMPT_LENGTH}"
         )
     start = time.time()
     try:
@@ -377,7 +377,7 @@ def parse_citations(citation_str):
     return elements
 
 
-def filter_tags_with_surroundings(df, tags, max_surrounding=3):
+def filter_tags_with_surroundings(df, tags, max_surrounding=6):
     """
     Filters a DataFrame to include rows where the tag column value is in the specified set of tags,
     with up to max_surrounding tags above and below each match, without exceeding MAX_SEGMENTS_LENGTH.
@@ -414,7 +414,7 @@ def filter_tags_with_surroundings(df, tags, max_surrounding=3):
             )
 
             # Check if adding this surrounding exceeds max text length
-            if total_text_length + temp_text_length <= MAX_TEXT_LENGTH:
+            if total_text_length + temp_text_length <= MAX_PROMPT_LENGTH:
                 # Update total text length and indices
                 total_text_length += temp_text_length
                 all_indices.update(temp_indices)
@@ -467,7 +467,9 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
             f"Prompt file {template} does not contain {CITATIONS_PLACEHOLDER}"
         )
     terminologies = extract_string_between_tags(template, "terminology")
-    example_responses_str = extract_string_between_tags(template, "example_response")
+    example_responses_str = extract_string_between_tags(
+        template, "data_extraction_response"
+    )
 
     # Parse this as a JSON
     example_responses_json = json.loads(example_responses_str)
@@ -489,16 +491,21 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
             template, "terminology", topic_definition
         )
         topic_prompt = replace_text_inside_tag(
-            topic_prompt, "example_response", example_response_filtered_str
+            topic_prompt, "data_extraction_response", example_response_filtered_str
         )
 
         filtered_df = responses[responses["topic"] == topic]
 
         print(f"Topic {topic}: {len(filtered_df)} rows")
         # Get relevant tags from documents_tags
+        df_summaries = filtered_df["summary"]
+        # Combine the summaries into a single string
+        combined_summaries = " ".join(df_summaries)
+
         # Check if it's a list of strings or a string
         if isinstance(filtered_df["citations"].iloc[0], list):
             df_citations = filtered_df["citations"]
+
             tags = sorted(set(flatten(df_citations.to_list())))
         else:
             all_citations = [
@@ -514,18 +521,20 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
             df_documents_tags, tags
         )
 
-        combined_strings = df_surrounding_documents_tags.apply(
+        tag_paragraph_list = df_surrounding_documents_tags.apply(
             lambda x: f"{x['tag']} {x['paragraph']}", axis=1
         ).tolist()
-        combined_citations_string = "\n".join(combined_strings)
+        combined_citations_string = "\n".join(tag_paragraph_list)
+        combined_citations_string += "\n" + combined_summaries
+
         topic_prompt = topic_prompt.replace(
             CITATIONS_PLACEHOLDER, combined_citations_string
         )
         # Check if length of topic_prompt exceeds the maximum length
-        if len(topic_prompt) > MAX_TEXT_LENGTH:
-            multiple = len(topic_prompt) / MAX_TEXT_LENGTH
+        if len(topic_prompt) > MAX_PROMPT_LENGTH:
+            multiple = len(topic_prompt) / MAX_PROMPT_LENGTH
             raise ValueError(
-                f"Input length {len(topic_prompt)} exceeds maximum length {MAX_TEXT_LENGTH} by {multiple:.2f}x"
+                f"Input length {len(topic_prompt)} exceeds maximum length {MAX_PROMPT_LENGTH} by {multiple:.2f}x"
             )
         prompts.append(topic_prompt)
 
@@ -534,9 +543,9 @@ def create_pass2_prompts(template_path: str, responses: pd.DataFrame) -> List[st
 
 def send_chatgpt_2(index: int, prompt: str) -> tuple[str, float]:
     try:
-        if len(prompt) > MAX_TEXT_LENGTH:
+        if len(prompt) > MAX_PROMPT_LENGTH:
             raise ValueError(
-                f"Input length {len(prompt)} exceeds maximum length {MAX_TEXT_LENGTH}"
+                f"Input length {len(prompt)} exceeds maximum length {MAX_PROMPT_LENGTH}"
             )
         t0 = time.time()
         response = openai.chat.completions.create(
@@ -657,10 +666,10 @@ def process_step_2(prompt_2, to_sql_table) -> List[PromptIO]:
     )
     lengths = list(map(len, prompts))
     # If any length exceeds the maximum length, raise an error
-    if any(length > MAX_TEXT_LENGTH for length in lengths):
+    if any(length > MAX_PROMPT_LENGTH for length in lengths):
         print(f"Prompts: {prompts}")
         raise ValueError(
-            f"Input length {max(lengths)} exceeds maximum length {MAX_TEXT_LENGTH}"
+            f"Input length {max(lengths)} exceeds maximum length {MAX_PROMPT_LENGTH}"
         )
     topics = to_sql_table["topic"].unique().tolist()
     print(f"Created {len(prompts)} questions for pass 2: {topics}")
@@ -928,12 +937,14 @@ def read_prompt_from_sql(prompt_name: str) -> str:
 
 
 def do_qa(pdf_path: str, prompt_1: str, prompt_2: str, limit: int | None = None):
+    t0 = time.time()
     document_text_with_tags = pdf2text_inject_tags(pdf_path)
     document_id = upload_file_new_doc_id(pdf_path)
     print(f"document_id: {document_id}")
     write_document_tags_to_sql(document_text_with_tags, document_id)
     tagged_text_process(document_id, prompt_1, prompt_2, limit)
-    print(f"Processed {pdf_path} as document_id {document_id}")
+    t1 = time.time() - t0
+    print(f"Processed {pdf_path} as document_id {document_id} in {t1:.2f} seconds")
 
 
 if __name__ == "__main__":

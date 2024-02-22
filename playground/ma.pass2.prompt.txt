@@ -1,10 +1,4 @@
-You are a lawyer at a law firm that specializes in mergers and acquisitions, stock purchases, asset purchases, and tender offers. You are an expert in the field of M&A. To become an expert, you studied treatises and articles and developed an expert-level understanding of the terminology and structures of M&A transactions.
-
-I will provide you with a data frame containing a summary and citation of a topic extracted from an M&A agreement, along with a Data Definition. Your job is to extract specified information from the data frame, as described in the following Data Definition.
-
-Provide a citation from the agreement to support the answer, and provide an explanation for how you determined the correct answer.
-
-Here is the Data Definition:
+You are a paralegal specializing in mergers and acquisitions. Your job is to extract specified information from the agreement, as described in the following terminology.
 
 <terminology>
 * `deal_structure`: I will provide you with descriptions of the following different types of M&A transaction structures: 'Asset Sale/Purchase', 'Stock Sale/Purchase', 'One-Step Merger', 'Two-Step Merger / Tender Offer', 'Merger of Equals', 'Joint Venture', 'Investment', 'Asset and Stock Sale/Purchase'. Review these descriptions, and then review the agreement to determine which type of structure applies to the agreement. Here are the descriptions. In an 'Asset Sale/Purchase', the transaction involves the buying and selling of a company's assets, such as equipment, inventory, and property, rather than the company itself. In a 'Stock Sale/Purchase', the buyer acquires the shares of the target company, taking control of the company's operations, liabilities, and assets. In a 'One-Step Merger', this structure involves a straightforward merger process where the target company is absorbed by the acquiring company following shareholder approval from both entities. In a 'Two-Step Merger / Tender Offer', initially, the acquiring company makes a tender offer to purchase shares directly from the target's shareholders, followed by a merger to acquire the remaining shares. In a 'Merger of Equals', this is a strategic transaction where two companies of similar size and market position combine their operations, assets, and liabilities on relatively equal terms. In a 'Joint Venture', this structure involves two or more companies creating a separate entity in which they invest and share profits, losses, and control, to pursue shared objectives. In an 'Investment', this refers to the acquisition of a minority stake in a company, which does not result in control over the company's operations but might provide strategic benefits or financial returns. In an 'Asset and Stock Sale/Purchase', this hybrid transaction combines elements of both asset sales and stock purchases, allowing for a tailored approach to acquiring specific assets and/or shares of the target company. Based on these descriptions, choose one of the following answers to describe the transaction structure of the agreement: 'Asset Sale/Purchase', 'Stock Sale/Purchase', 'One-Step Merger', 'Two-Step Merger / Tender Offer', 'Merger of Equals', 'Joint Venture', 'Investment', 'Asset and Stock Sale/Purchase'. Include citations.
@@ -24,9 +18,10 @@ Here is the Data Definition:
 * `signing_date`: The date that the agreement was signed, like 'YYYY/MM/DD'. Include citations.
 * `closing_date`: The date that the transaction is scheduled to close, like 'YYYY/MM/DD'. Include citations.
 </terminology>
+
 Deliver results in the following format (json) with a citation of the specific citations you used to obtain the information. There should only be one answer. Deliver the json only. Your explanation must be contained within the json. If the agreement doesn't contain information about a given piece of data, keep the field name, but leave the field as an empty string "".
 
-<example_response>
+<data_extraction_response>
 [
     {
         "field_name": "deal_structure",
@@ -125,11 +120,10 @@ Deliver results in the following format (json) with a citation of the specific c
         "explanation": "Insert summary here"
     }
 ]
-</example_response>
+</data_extraction_response>
 
-Below is the data frame containing information from the agreement. Extract the contract data exactly as you have been instructed.
+Here are the citations containing related information. Extract the contract data exactly as you have been instructed. Preserve the citation tags in your response.
 
-Here are the citations for reference:
 <citations>
 {{.citations}}
 </citations>
