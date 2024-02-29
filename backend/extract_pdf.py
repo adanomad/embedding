@@ -29,16 +29,17 @@ def extract_images_and_text(pdf_path, output_folder, inject_tokens=False):
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
 
-            text = page.get_text()
+            text = page.get_textpage().extractText()
             if inject_tokens:
                 # This could cause string find issues if the text is not found in original document
                 text = text.replace("\n", " ")
                 text = re.sub(r"\s+", " ", text).strip()
                 indexed_sentences = extract_segments(text)
                 text = inject_indices(indexed_sentences, page_num)
-                all_text_file.write(text)
             else:
                 all_text_file.write(f"<PAGE {page_num}/>\n")
+
+            all_text_file.write(text)
 
             # with open(f"{output_folder}/{page_num}.txt", "w") as text_file:
             #     text_file.write(f"<PAGE {page_num}/>\n")
